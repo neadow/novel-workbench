@@ -1,0 +1,3658 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>小说创作工作台（电脑版）</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#c98b4b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+/* ========== 小说创作工作台 · 全局样式 ========== */
+:root {
+  --bg: #f7f3ea; --bg2: #fffdf7; --panel: #fffaf0; --ink: #3a2e28; --ink2: #8a7a6a;
+  --line: #e5d9c3; --accent: #c98b4b; --accent-soft: #f3e3c8; --danger: #c95b5b; --ok: #5aa469;
+  --shadow: 0 8px 28px rgba(90, 70, 40, .14);
+  --radius: 14px;
+  --font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+}
+[data-theme="dark"] {
+  --bg: #191420; --bg2: #211a2a; --panel: #271f31; --ink: #efe6d8; --ink2: #a49484;
+  --line: #3c3146; --accent: #d99a5b; --accent-soft: #3a2c3f; --danger: #e07a7a; --ok: #7cbf8b;
+  --shadow: 0 8px 28px rgba(0, 0, 0, .45);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body { font-family: var(--font); background: var(--bg); color: var(--ink); font-size: 15px; }
+button { font-family: inherit; cursor: pointer; }
+::selection { background: var(--accent-soft); }
+
+/* ===== 基础控件 ===== */
+.input, textarea.input, select.input {
+  font-family: inherit; font-size: 15px; padding: 9px 12px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--bg2); color: var(--ink); outline: none;
+}
+.input:focus { border-color: var(--accent); }
+.btn {
+  padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg2);
+  color: var(--ink); font-size: 14px; transition: filter .15s, transform .05s;
+}
+.btn:active { transform: scale(.97); }
+.btn:hover { filter: brightness(1.04); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.danger { color: var(--danger); }
+.btn.small { padding: 4px 9px; font-size: 12.5px; border-radius: 8px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.count { font-size: 12px; color: var(--ink2); white-space: nowrap; }
+
+/* ===== 应用骨架 ===== */
+#app { display: flex; flex-direction: column; height: 100dvh; }
+header.top {
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--bg2);
+  border-bottom: 1px solid var(--line); z-index: 40;
+}
+header.top .brand { font-weight: 800; font-size: 17px; letter-spacing: 1px; color: var(--accent); }
+header.top .brand small { font-weight: 400; font-size: 11px; color: var(--ink2); margin-left: 6px; }
+nav.tabs { display: flex; gap: 2px; margin-left: auto; overflow-x: auto; }
+nav.tabs button {
+  border: none; background: none; padding: 8px 12px; border-radius: 9px; color: var(--ink2);
+  font-size: 14px; white-space: nowrap;
+}
+nav.tabs button.on { background: var(--panel); color: var(--accent); font-weight: 700; }
+main { flex: 1; overflow: hidden; position: relative; }
+.page { display: none; position: absolute; inset: 0; }
+.page.active { display: flex; }
+nav.bottom { display: none; }
+
+/* ===== 页面通用 ===== */
+.page-inner { flex: 1; overflow: auto; padding: 18px; }
+.page-title { font-size: 18px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.page-title .spacer { flex: 1; }
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px; margin-bottom: 12px;
+}
+.card h4 { font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.muted { color: var(--ink2); font-size: 12.5px; }
+.empty-tip { color: var(--ink2); text-align: center; padding: 40px 20px; font-size: 13.5px; line-height: 2; }
+
+/* ===== 写作页 ===== */
+.page-writing { flex-direction: row; }
+.w-list {
+  width: 235px; min-width: 235px; border-right: 1px solid var(--line); background: var(--bg2);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.w-list-h { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); align-items: center; }
+.w-list-h .spacer { flex: 1; }
+#chapter-list { flex: 1; overflow: auto; padding: 8px; }
+.chap-item {
+  padding: 9px 10px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; border: 1px solid transparent;
+  display: flex; align-items: center; gap: 6px;
+}
+.chap-item:hover { background: var(--panel); }
+.chap-item.on { background: var(--panel); border-color: var(--accent); }
+.chap-item .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.chap-item .c { font-size: 11px; color: var(--ink2); }
+.w-editor { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.w-editor-h { display: flex; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); align-items: center; flex-wrap: wrap; }
+.w-editor-h #chap-title { flex: 1; min-width: 120px; font-weight: 600; }
+.w-outline { padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--bg2); }
+.w-outline-h { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink2); margin-bottom: 6px; flex-wrap: wrap; }
+.w-outline-h .spacer { flex: 1; }
+.outline-item { display: flex; align-items: center; gap: 8px; padding: 4px 2px; font-size: 13.5px; }
+.outline-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+.outline-item .txt { flex: 1; }
+.outline-item .txt.done { text-decoration: line-through; color: var(--ink2); }
+.w-selected {
+  display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--accent-soft);
+  border-bottom: 1px solid var(--line); font-size: 12.5px; flex-wrap: wrap;
+}
+.w-selected[hidden] { display: none; }
+#chap-content {
+  flex: 1; width: 100%; border: none; outline: none; resize: none; padding: 18px;
+  font-size: 16.5px; line-height: 1.9; background: var(--bg); color: var(--ink); font-family: var(--font);
+}
+#chap-content:read-only { opacity: .72; }
+.w-ai {
+  width: 350px; min-width: 350px; border-left: 1px solid var(--line); background: var(--bg2);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.w-ai-h { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-weight: 700; }
+.w-ai-h .ctx { font-weight: 400; font-size: 11px; color: var(--ok); }
+.w-ai-h .spacer { flex: 1; }
+.chat-box { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 92%; padding: 10px 12px; border-radius: 12px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+.msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.msg.ai { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.msg .acts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.msg .meta { font-size: 11px; color: var(--ink2); margin-top: 6px; }
+.chat-in { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); align-items: flex-end; }
+.chat-in textarea { flex: 1; max-height: 140px; }
+.chat-quick { display: flex; gap: 6px; padding: 8px 10px 0; flex-wrap: wrap; }
+
+/* ===== 人物页 ===== */
+.char-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.char-card { cursor: pointer; }
+.char-card .name { font-size: 16px; font-weight: 700; }
+.char-card .bio { font-size: 12.5px; color: var(--ink2); margin-top: 6px; line-height: 1.6; max-height: 60px; overflow: hidden; }
+.pending-fact { display: flex; gap: 8px; align-items: flex-start; padding: 8px; border: 1px dashed var(--accent); border-radius: 10px; margin-top: 6px; font-size: 13px; }
+.pending-fact .src { font-size: 11px; color: var(--ink2); }
+.relation-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 20px; padding: 3px 10px; font-size: 12px; margin: 2px; }
+.rel-graph { width: 100%; height: 520px; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); touch-action: none; }
+
+/* ===== 世界观 ===== */
+.cat-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.cat-tabs button { border: 1px solid var(--line); background: var(--bg2); border-radius: 20px; padding: 6px 14px; font-size: 13px; color: var(--ink2); }
+.cat-tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.world-item .title { font-size: 15px; font-weight: 700; }
+.world-item .content { font-size: 13.5px; color: var(--ink); line-height: 1.8; white-space: pre-wrap; margin-top: 6px; }
+
+/* ===== 宗门布局 ===== */
+.sect-wrap { overflow: auto; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); }
+.sect-wrap svg { display: block; }
+
+/* ===== 地图页 ===== */
+.map-page { display: flex; flex-direction: row; }
+.map-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.map-toolbar { display: flex; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--bg2); align-items: center; flex-wrap: wrap; }
+.map-toolbar .spacer { flex: 1; }
+.map-stage { flex: 1; position: relative; overflow: hidden; background: #10141c; }
+.map-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.map-pop { position: absolute; z-index: 20; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; box-shadow: var(--shadow); max-width: 280px; font-size: 13px; }
+.map-versions { position: absolute; right: 12px; top: 12px; z-index: 20; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; max-height: 60%; overflow: auto; width: 220px; box-shadow: var(--shadow); }
+.map-versions h5 { font-size: 13px; margin-bottom: 6px; }
+.version-item { font-size: 12px; padding: 5px 6px; border-radius: 8px; cursor: pointer; }
+.version-item.on { background: var(--accent-soft); }
+.version-item .ev { font-size: 11px; color: var(--ink2); }
+/* 地图 AI 对话面板 */
+.map-ai {
+  width: 330px; min-width: 330px; border-left: 1px solid var(--line); background: var(--bg2);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.map-ai-h { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-weight: 700; }
+.map-ai-h .ctx { font-weight: 400; font-size: 11px; color: var(--ok); }
+.map-ai-h .spacer { flex: 1; }
+@media (max-width: 1200px) {
+  .map-ai {
+    position: fixed; right: 0; top: 0; bottom: 0; width: min(92vw, 400px); z-index: 80;
+    transform: translateX(105%); transition: transform .25s; box-shadow: var(--shadow);
+  }
+  .map-ai.open { transform: none; }
+}
+
+/* ===== 检测页 ===== */
+.issue {
+  border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 10px;
+  padding: 12px; margin-bottom: 10px; background: var(--panel);
+}
+.issue.high { border-left-color: var(--danger); }
+.issue.med { border-left-color: var(--accent); }
+.issue.low { border-left-color: var(--ok); }
+.issue .q { font-size: 12px; font-style: italic; color: var(--ink2); background: var(--bg); padding: 6px 8px; border-radius: 8px; margin: 6px 0; }
+.issue .acts { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
+/* ===== 设置页 ===== */
+.settings-form { max-width: 640px; }
+.settings-form .row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.settings-form label { font-size: 13px; font-weight: 600; color: var(--ink2); }
+.settings-form .hint { font-size: 12px; color: var(--ink2); line-height: 1.7; }
+
+/* ===== 日志 ===== */
+.log-item { display: flex; gap: 10px; align-items: baseline; font-size: 13px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.log-item .t { color: var(--ink2); font-size: 12px; white-space: nowrap; }
+.log-item .d { flex: 1; }
+.log-item .tag { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--accent-soft); white-space: nowrap; }
+
+/* ===== 弹窗 / 提示 ===== */
+.modal-mask {
+  position: fixed; inset: 0; background: rgba(20, 15, 25, .5); z-index: 200;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal { background: var(--bg2); border-radius: 16px; max-width: 480px; width: 100%; box-shadow: var(--shadow); overflow: hidden; }
+.modal-h { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; font-weight: 700; border-bottom: 1px solid var(--line); }
+.modal-h .x { border: none; background: none; color: var(--ink2); font-size: 15px; }
+.modal-b { padding: 16px; max-height: 60vh; overflow: auto; }
+.modal-f { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line); }
+#toast-box { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 300; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+.toast { background: var(--panel); border: 1px solid var(--line); color: var(--ink); padding: 9px 18px; border-radius: 20px; font-size: 13.5px; box-shadow: var(--shadow); opacity: 1; transition: opacity .4s; }
+.toast.ok { border-color: var(--ok); }
+.toast.err { border-color: var(--danger); color: var(--danger); }
+.toast.out { opacity: 0; }
+
+/* ===== 响应式：平板 / 手机 ===== */
+@media (max-width: 1200px) {
+  .w-ai {
+    position: fixed; right: 0; top: 0; bottom: 0; width: min(92vw, 400px); z-index: 80;
+    transform: translateX(105%); transition: transform .25s; box-shadow: var(--shadow);
+  }
+  .w-ai.open { transform: none; }
+}
+@media (max-width: 768px) {
+  nav.tabs { display: none; }
+  nav.bottom {
+    display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg2);
+    border-top: 1px solid var(--line); z-index: 70;
+  }
+  nav.bottom button {
+    flex: 1; padding: 8px 2px 10px; font-size: 11px; background: none; border: none;
+    color: var(--ink2); display: flex; flex-direction: column; gap: 2px; align-items: center;
+  }
+  nav.bottom button.on { color: var(--accent); font-weight: 700; }
+  main { padding-bottom: 54px; }
+  .w-list {
+    position: fixed; left: 0; top: 0; bottom: 0; width: min(82vw, 300px); z-index: 80;
+    transform: translateX(-105%); transition: transform .25s; box-shadow: var(--shadow);
+  }
+  .w-list.open { transform: none; }
+  .only-mobile { display: inline-block; }
+  .page-inner { padding: 12px; }
+  #chap-content { font-size: 16px; padding: 12px; }
+  .w-editor-h .hide-mobile { display: none; }
+}
+@media (min-width: 769px) { .only-mobile { display: none; } }
+/* 抽屉模式下才显示（<1201px 写作页 AI 面板是抽屉，需要打开按钮；桌面三栏常驻不需要） */
+@media (min-width: 1201px) { .only-drawer { display: none; } }
+
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast-box"></div>
+<script>
+window.__DEVICE__ = 'pc';
+
+;/* ==== util.js ==== */
+'use strict';
+/* ===== 通用工具 ===== */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const debounce = (fn, ms = 400) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const wordCount = (s) => (String(s || '').replace(/\s/g, '').length);
+const nowStr = () => new Date().toLocaleString('zh-CN', { hour12: false });
+
+/* ===== 轻提示 ===== */
+function toast(msg, type = 'info') {
+  const box = $('#toast-box');
+  if (!box) return;
+  const d = document.createElement('div');
+  d.className = 'toast ' + type;
+  d.textContent = msg;
+  box.appendChild(d);
+  setTimeout(() => d.classList.add('out'), 2400);
+  setTimeout(() => d.remove(), 2800);
+}
+
+/* ===== 剪贴板（带降级方案） ===== */
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('已复制到剪贴板', 'ok');
+    return true;
+  } catch (e) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0;';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      toast('已复制到剪贴板', 'ok');
+      return true;
+    } catch (e2) {
+      toast('复制失败，请手动选择复制', 'err');
+      return false;
+    }
+  }
+}
+
+/* ===== 下载文件 ===== */
+function download(filename, text, mime = 'text/plain;charset=utf-8') {
+  const blob = new Blob([text], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 600);
+}
+
+/* ===== 选择文件 ===== */
+function filePicker(accept = '.json') {
+  return new Promise((res) => {
+    const i = document.createElement('input');
+    i.type = 'file';
+    i.accept = accept;
+    i.style.display = 'none';
+    document.body.appendChild(i);
+    i.onchange = () => { i.remove(); res(i.files[0] || null); };
+    i.click();
+  });
+}
+
+/* ===== 弹窗 ===== */
+function modal({ title, body, okText = '确定', cancelText = '取消', okClass = 'primary', cancelable = true }) {
+  return new Promise((resolve) => {
+    // 先关闭已存在的弹窗（防止叠窗），并唤醒它们的等待者，避免逻辑卡死
+    $$('.modal-mask').forEach(m => { if (m._resolve) m._resolve(null); m.remove(); });
+    const m = document.createElement('div');
+    m.className = 'modal-mask';
+    m.innerHTML = `<div class="modal"><div class="modal-h">${esc(title)}<button class="x" data-x>✕</button></div><div class="modal-b"></div><div class="modal-f"><button data-cancel>${esc(cancelText)}</button><button data-ok class="${okClass}">${esc(okText)}</button></div></div>`;
+    const b = $('.modal-b', m);
+    if (typeof body === 'string') b.innerHTML = body; else b.appendChild(body);
+    m._resolve = resolve;
+    const close = (v) => { m.remove(); resolve(v); };
+    $('[data-x]', m).onclick = () => close(null);
+    if (cancelable) $('[data-cancel]', m).onclick = () => close(false);
+    else $('[data-cancel]', m).style.display = 'none';
+    $('[data-ok]', m).onclick = () => close(true);
+    m.addEventListener('click', e => { if (e.target === m && cancelable) close(null); });
+    document.body.appendChild(m);
+  });
+}
+const confirmDlg = (msg) => modal({ title: '确认操作', body: `<p style="line-height:1.6">${esc(msg)}</p>`, okText: '确定', cancelText: '取消' });
+function promptDlg(title, value = '', placeholder = '请输入') {
+  return new Promise(resolve => {
+    const inp = document.createElement('input');
+    inp.className = 'input';
+    inp.value = value;
+    inp.placeholder = placeholder;
+    inp.style.width = '100%';
+    modal({ title, body: inp, okText: '确定', cancelText: '取消' }).then(ok => resolve(ok ? inp.value.trim() : null));
+  });
+}
+function textareaDlg(title, value = '', placeholder = '') {
+  return new Promise(resolve => {
+    const ta = document.createElement('textarea');
+    ta.className = 'input';
+    ta.value = value;
+    ta.placeholder = placeholder;
+    ta.style.cssText = 'width:100%;min-height:120px;';
+    modal({ title, body: ta, okText: '确定', cancelText: '取消' }).then(ok => resolve(ok ? ta.value : null));
+  });
+}
+
+/* ===== 小 DOM 构建器 ===== */
+function el(tag, attrs = {}, ...children) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v;
+    else if (k === 'style') n.style.cssText = v;
+    else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.slice(2), v);
+    else if (k === 'html') n.innerHTML = v;
+    else if (k === 'text') n.textContent = v;
+    else if (v !== null && v !== undefined) n.setAttribute(k, v);
+  }
+  for (const c of children.flat()) {
+    if (c === null || c === undefined) continue;
+    n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  return n;
+}
+
+;
+;/* ==== store.js ==== */
+'use strict';
+/* ===== 本地数据库（IndexedDB）+ 偏好 + 操作日志 + 工程导入导出 ===== */
+const DB_NAME = 'novel_workbench';
+const DB_VER = 1;
+const STORES = ['chapters', 'characters', 'world', 'sect', 'maps', 'log', 'chat'];
+let _db = null;
+
+function openDB() {
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open(DB_NAME, DB_VER);
+    rq.onupgradeneeded = e => {
+      const db = e.target.result;
+      for (const s of STORES) if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id' });
+    };
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function db() { if (!_db) _db = await openDB(); return _db; }
+
+function txDone(tx) { return new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); }); }
+
+async function dbAll(store) {
+  const d = await db();
+  return new Promise((res, rej) => {
+    const rq = d.transaction(store).objectStore(store).getAll();
+    rq.onsuccess = () => res(rq.result || []);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function dbGet(store, id) {
+  const d = await db();
+  return new Promise((res, rej) => {
+    const rq = d.transaction(store).objectStore(store).get(id);
+    rq.onsuccess = () => res(rq.result || null);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function dbPut(store, obj) {
+  const d = await db();
+  return new Promise((res, rej) => {
+    const tx = d.transaction(store, 'readwrite');
+    tx.objectStore(store).put(obj);
+    tx.oncomplete = res;
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function dbDel(store, id) {
+  const d = await db();
+  return new Promise((res, rej) => {
+    const tx = d.transaction(store, 'readwrite');
+    tx.objectStore(store).delete(id);
+    tx.oncomplete = res;
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function dbClear(store) {
+  const d = await db();
+  return new Promise((res, rej) => {
+    const tx = d.transaction(store, 'readwrite');
+    tx.objectStore(store).clear();
+    tx.oncomplete = res;
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
+/* ===== 偏好设置（localStorage：AI 配置、主题等） ===== */
+const Prefs = {
+  get() { try { return JSON.parse(localStorage.getItem('workbench_prefs') || '{}'); } catch { return {}; } },
+  set(p) { localStorage.setItem('workbench_prefs', JSON.stringify({ ...Prefs.get(), ...p })); }
+};
+
+/* ===== AI 操作日志 ===== */
+async function logAdd(type, desc, detail = '') {
+  try { await dbPut('log', { id: uid(), time: Date.now(), type, desc, detail }); } catch (e) { /* 日志失败不阻塞 */ }
+}
+
+/* ===== 首次使用初始化 ===== */
+async function ensureDefaults() {
+  const world = await dbGet('world', 'world');
+  if (!world) {
+    await dbPut('world', { id: 'world', items: [
+      { id: uid(), category: '金手指', title: '主角金手指', content: '（待补充）' },
+      { id: uid(), category: '境界体系', title: '境界设定', content: '（待补充）' }
+    ] });
+  }
+  if (!(await dbGet('sect', 'tree'))) await dbPut('sect', { id: 'tree', nodes: [] });
+  if (!(await dbGet('chat', 'chat'))) await dbPut('chat', { id: 'chat', messages: [] });
+  if (!(await dbGet('chat', 'mapchat'))) await dbPut('chat', { id: 'mapchat', messages: [] });
+  const chapters = await dbAll('chapters');
+  if (chapters.length === 0) {
+    await dbPut('chapters', {
+      id: uid(), title: '第一章', outline: ['（示例）写下本章第一个钩子', '（示例）主角登场', '（示例）留下悬念'],
+      content: '', locked: false, snapshots: [], updatedAt: Date.now()
+    });
+  }
+}
+
+/* ===== 工程导出 / 导入 ===== */
+async function exportProject() {
+  const data = { app: 'novel-workbench', ver: 1, time: Date.now() };
+  for (const s of STORES) data[s] = await dbAll(s);
+  return JSON.stringify(data, null, 2);
+}
+async function importProject(jsonText) {
+  const data = JSON.parse(jsonText);
+  if (!data || data.app !== 'novel-workbench') throw new Error('不是本工具导出的工程文件');
+  for (const s of STORES) {
+    await dbClear(s);
+    for (const it of (data[s] || [])) await dbPut(s, it);
+  }
+}
+
+;
+;/* ==== ai.js ==== */
+'use strict';
+/* ===== AI 接口层：OpenAI 兼容 /chat/completions ===== */
+const AI = {
+  cfg() { return Prefs.get(); },
+
+  /* 普通对话，返回文本 */
+  async chat(messages, { temperature } = {}) {
+    const c = AI.cfg();
+    if (!c.baseURL) throw new Error('请先在「设置」页配置 AI 接口地址');
+    if (!c.apiKey) throw new Error('请先在「设置」页填写 API Key');
+    const proxyMode = !!c.proxyMode && location.protocol.startsWith('http');
+    const base = c.baseURL.replace(/\/+$/, '');
+    const url = proxyMode ? location.origin + '/proxy/chat/completions' : base + '/chat/completions';
+    const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + c.apiKey };
+    if (proxyMode) headers['X-Upstream'] = base;
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: c.model || 'deepseek-chat',
+          messages,
+          temperature: temperature ?? (c.temperature ?? 0.7),
+          stream: false
+        })
+      });
+    } catch (e) {
+      throw new Error('网络请求失败（可能是跨域/CORS 问题或断网，可试试设置里的「本地代理模式」，详见使用说明）');
+    }
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { const j = await res.json(); msg = (j.error && (j.error.message || j.error.code)) || msg; } catch (e) { /* 忽略 */ }
+      throw new Error('接口返回错误：' + msg);
+    }
+    const j = await res.json();
+    return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+  },
+
+  /* 要求返回 JSON 的任务 */
+  async json(messages) {
+    const txt = await AI.chat([...messages, { role: 'user', content: '只输出一个 JSON 对象，不要输出任何其他文字、解释或代码块标记。' }], { temperature: 0.2 });
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('AI 未返回可解析的 JSON：' + txt.slice(0, 80));
+    try { return JSON.parse(m[0]); } catch (e) { throw new Error('AI 返回的 JSON 无法解析'); }
+  },
+
+  /* 连接测试 */
+  async test() {
+    const t = await AI.chat([{ role: 'user', content: '只回复四个字：连接成功' }], { temperature: 0 });
+    return (t || '').trim();
+  },
+
+  /* 文生图（OpenAI 兼容 /images/generations）：返回 dataURL */
+  async genImage(prompt) {
+    const c = AI.cfg();
+    const base = (c.imgBaseURL || c.baseURL || '').replace(/\/+$/, '');
+    const key = c.imgApiKey || c.apiKey || '';
+    const model = c.imgModel || 'cogview-3-flash';
+    if (!base) throw new Error('请先在「设置」页配置 AI 接口（图像生成将复用同一服务）');
+    if (!key) throw new Error('请先在「设置」页填写 API Key');
+    const url = base + '/images/generations';
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+        body: JSON.stringify({ model, prompt, size: '1024x1024', n: 1, response_format: 'b64_json' })
+      });
+    } catch (e) {
+      throw new Error('图像生成请求失败（跨域/断网问题可开「本地代理模式」）');
+    }
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { const j = await res.json(); msg = (j.error && (j.error.message || j.error.code)) || msg; } catch (e) { /* 忽略 */ }
+      throw new Error('图像接口返回错误：' + msg);
+    }
+    const j = await res.json();
+    const item = (j.data && j.data[0]) || {};
+    if (item.b64_json) return 'data:image/png;base64,' + item.b64_json;
+    if (item.url) {
+      // 尝试下载（部分服务返回外链，可能跨域受限）
+      try {
+        const r = await fetch(item.url);
+        const blob = await r.blob();
+        return await new Promise((res2, rej2) => {
+          const fr = new FileReader();
+          fr.onload = () => res2(fr.result);
+          fr.onerror = () => rej2(new Error('图片下载失败'));
+          fr.readAsDataURL(blob);
+        });
+      } catch (e) {
+        throw new Error('该服务返回图片链接且不支持跨域下载，请改用返回 base64 的服务（如智谱 cogview / 硅基流动 FLUX）');
+      }
+    }
+    throw new Error('图像接口返回格式无法识别');
+  },
+
+  /* 构建项目上下文（世界观 + 人物卡 + 指定章节），供写作与检测使用 */
+  async projectContext({ chapterId } = {}) {
+    const world = await dbGet('world', 'world');
+    const chars = await dbAll('characters');
+    const sectTree = (await dbGet('sect', 'tree')) || { nodes: [] };
+    const nodeName = (id) => { const n = sectTree.nodes.find(x => x.id === id); return n ? n.name : null; };
+    const lines = [];
+    lines.push('【世界观设定】');
+    if (world && world.items.length) {
+      for (const it of world.items) {
+        if (it.title || it.content) lines.push(`- [${it.category || '设定'}] ${it.title || '(未命名)'}：${it.content || '(空)'}`);
+      }
+    } else lines.push('（暂无）');
+    lines.push('');
+    lines.push('【人物卡】');
+    if (chars.length) {
+      for (const ch of chars.slice(0, 15)) {
+        const facts = (ch.facts || []).filter(f => f.confirmed).map(f => f.text).join('；');
+        const rels = (ch.relations || []).map(r => `与${r.targetName || '?'}(${r.type})`).join('，');
+        const persona = [ch.personality ? '性格：' + ch.personality : '', ch.speechStyle ? '说话风格：' + ch.speechStyle : ''].filter(Boolean).join('，');
+        const skills = (ch.skills || []).map(s => s.name + (s.desc ? '（' + s.desc + '）' : '')).join('、');
+        const faction = ch.faction && ch.faction.nodeId ? `隶属${nodeName(ch.faction.nodeId) || '某势力'}${ch.faction.role ? '·' + ch.faction.role : ''}` : '';
+        lines.push(`- ${ch.name}：${ch.bio || '(无简介)'}${persona ? ' | ' + persona : ''}${skills ? ' | 功法技能：' + skills : ''}${faction ? ' | ' + faction : ''}${facts ? ' | 特征：' + facts : ''}${rels ? ' | 关系：' + rels : ''}`);
+      }
+    } else lines.push('（暂无）');
+    let chapter = null;
+    if (chapterId) chapter = await dbGet('chapters', chapterId);
+    return { text: lines.join('\n'), chapter };
+  },
+
+  /* 组装写作系统提示词 */
+  writingSystem() {
+    return '你是一位资深网文写作助手，深谙男频/女频爽文套路与网文平台规则。' +
+      '写作要求：文笔流畅自然，避免 AI 腔（不要堆砌排比、不要每段总结、不要滥用"然而""不禁""仿佛"）。' +
+      '行动准则：只提供建议和文本，绝不擅自修改用户已写内容；用户让你改什么你就改什么，范围之外的一律不动。';
+  }
+};
+
+;
+;/* ==== app.js ==== */
+'use strict';
+/* ===== 应用骨架：导航 / 路由 / 设置页 / 启动 ===== */
+const DEVICE = window.__DEVICE__ || 'auto'; // phone | tablet | pc | auto
+const PAGES = [
+  { id: 'writing',    label: '写作',   icon: '📖' },
+  { id: 'characters', label: '人物',   icon: '👥' },
+  { id: 'world',      label: '世界观', icon: '🌍' },
+  { id: 'sect',       label: '势力',   icon: '🚩' },
+  { id: 'map',        label: '地图',   icon: '🗺️' },
+  { id: 'detect',     label: '检测',   icon: '🔍' },
+  { id: 'settings',   label: '设置',   icon: '⚙️' }
+];
+const PageMods = {}; // 各页面模块在此注册
+let curPage = 'writing';
+
+const App = {
+  async boot() {
+    document.body.dataset.device = DEVICE;
+    document.body.dataset.theme = Prefs.get().theme || 'light';
+    // 构建骨架
+    const app = $('#app');
+    app.innerHTML = `
+      <header class="top">
+        <div class="brand">📚 小说创作工作台 <small>AI 辅助 · 本地存储</small></div>
+        <nav class="tabs" id="tabs"></nav>
+      </header>
+      <main id="main"></main>
+      <nav class="bottom" id="bottom-nav"></nav>`;
+    // 渲染导航
+    const tabs = $('#tabs'), bottom = $('#bottom-nav');
+    for (const p of PAGES) {
+      tabs.appendChild(el('button', { 'data-page': p.id, text: p.icon + ' ' + p.label, onclick: () => App.navTo(p.id) }));
+      bottom.appendChild(el('button', { 'data-page': p.id, html: `<span style="font-size:16px">${p.icon}</span>${p.label}`, onclick: () => App.navTo(p.id) }));
+    }
+    // 页面容器
+    const main = $('#main');
+    for (const p of PAGES) main.appendChild(el('div', { class: 'page', id: 'page-' + p.id }));
+    // 数据初始化
+    await ensureDefaults();
+    // 路由
+    window.addEventListener('hashchange', () => App.navTo(location.hash.slice(1) || 'writing'));
+    App.navTo(location.hash.slice(1) || 'writing');
+    // PWA Service Worker（需 http/https 环境）
+    if (location.protocol.startsWith('http') && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => { /* 忽略 */ });
+    }
+  },
+
+  navTo(id) {
+    if (!PAGES.some(p => p.id === id)) id = 'writing';
+    curPage = id;
+    for (const p of PAGES) {
+      $('#page-' + p.id).classList.toggle('active', p.id === id);
+      const tb = $(`[data-page="${p.id}"]`, $('#tabs'));
+      const bb = $(`[data-page="${p.id}"]`, $('#bottom-nav'));
+      if (tb) tb.classList.toggle('on', p.id === id);
+      if (bb) bb.classList.toggle('on', p.id === id);
+    }
+    const mod = PageMods[id];
+    const container = $('#page-' + id);
+    if (mod) { if (mod.mounted) mod.focus(container); else { mod.mounted = true; mod.mount(container); } }
+    else container.innerHTML = '<div class="empty-tip">该模块建设中…</div>';
+  },
+
+  applyTheme(t) { document.body.dataset.theme = t; }
+};
+
+/* ===== 设置页 ===== */
+PageMods.settings = {
+  mounted: false,
+  mount(c) {
+    c.innerHTML = `
+      <div class="page-inner">
+        <div class="page-title">⚙️ 设置</div>
+        <div class="card settings-form">
+          <h4>🤖 AI 接口配置</h4>
+          <div class="row"><label>接口地址 baseURL（OpenAI 兼容）</label>
+            <input id="cfg-base" class="input" placeholder="https://api.deepseek.com">
+            <div class="hint">已内置兼容 DeepSeek / 通义千问 / 智谱 / 硅基流动 / Kimi 等（填写各家的 baseURL + Key + 模型名即可）。</div></div>
+          <div class="row"><label>API Key</label>
+            <input id="cfg-key" class="input" type="password" placeholder="sk-..."></div>
+          <div class="row"><label>模型名</label>
+            <input id="cfg-model" class="input" placeholder="deepseek-chat"></div>
+          <div class="row"><label>温度：<span id="cfg-temp-v">0.7</span>（越低越严谨，越高越有创意）</label>
+            <input id="cfg-temp" type="range" min="0" max="1.5" step="0.1" value="0.7"></div>
+          <div class="row"><label>本地代理模式（平板/手机直连 AI 报跨域错误时开启）</label>
+            <label style="font-size:13px;font-weight:400;display:flex;gap:8px;align-items:center"><input type="checkbox" id="cfg-proxy" style="width:18px;height:18px"> 通过电脑上运行的「启动电脑版.bat」服务器转发 AI 请求（电脑需与设备在同一 WiFi）</label>
+            <div class="hint">开启后，请求会先发给本机服务器再转发给 AI 服务，可绕过浏览器的跨域限制。</div></div>
+          <h4 style="margin-top:16px">🎨 图像生成配置（地图 AI 底图用）</h4>
+          <div class="hint" style="margin-bottom:10px">可留空默认继承上面的对话配置。图像模型示例：智谱 <b>cogview-3-flash</b>（便宜）、硅基流动 <b>black-forest-labs/FLUX.1-schnell</b>、通义万相 <b>wanx2.1-t2i-turbo</b>、火山方舟 <b>seedream-3-0-t2i</b>。</div>
+          <div class="row"><label>图像接口 baseURL（默认继承对话配置）</label>
+            <input id="cfg-imgbase" class="input" placeholder="留空则使用上方接口地址"></div>
+          <div class="row"><label>图像 API Key（默认继承对话配置）</label>
+            <input id="cfg-imgkey" class="input" type="password" placeholder="留空则使用上方 Key"></div>
+          <div class="row"><label>图像模型</label>
+            <input id="cfg-imgmodel" class="input" placeholder="cogview-3-flash"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button id="cfg-save" class="btn primary">💾 保存配置</button>
+            <button id="cfg-test" class="btn">🔌 测试连接</button>
+          </div>
+          <div id="cfg-result" class="hint" style="margin-top:10px"></div>
+        </div>
+        <div class="card settings-form">
+          <h4>📦 数据管理</h4>
+          <div class="hint" style="margin-bottom:10px">所有数据（章节、人物、设定、地图、对话、日志）保存在本机浏览器数据库中，不会上传。跨设备迁移请用导出/导入。</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button id="btn-export" class="btn">📤 导出工程（JSON 备份）</button>
+            <button id="btn-import" class="btn">📥 导入工程</button>
+            <button id="btn-wipe" class="btn danger">🗑 清空全部数据</button>
+          </div>
+        </div>
+        <div class="card settings-form">
+          <h4>🎨 外观</h4>
+          <div style="display:flex;gap:10px">
+            <button class="btn" data-theme-btn="light">☀️ 浅色</button>
+            <button class="btn" data-theme-btn="dark">🌙 深色</button>
+          </div>
+        </div>
+        <div class="card settings-form">
+          <h4>ℹ️ 关于</h4>
+          <div class="hint">
+            当前设备模式：<b>${DEVICE}</b>（手机/平板/电脑版为同一应用，仅在默认布局上略有不同）<br>
+            AI 连接失败排查：① 确认已保存配置并测试连接；② 部分 AI 服务不允许浏览器直连（CORS），此时请在电脑上运行「启动电脑版.bat」，手机/平板连同一 WiFi 后访问电脑 IP（见使用说明）。<br>
+            同步：暂用「导出/导入」手动同步，自动同步后续版本提供。
+          </div>
+        </div>
+      </div>`;
+    // 载入配置
+    const cfg = AI.cfg();
+    $('#cfg-base').value = cfg.baseURL || 'https://api.deepseek.com';
+    $('#cfg-key').value = cfg.apiKey || '';
+    $('#cfg-model').value = cfg.model || 'deepseek-chat';
+    $('#cfg-temp').value = cfg.temperature ?? 0.7;
+    $('#cfg-temp-v').textContent = (cfg.temperature ?? 0.7).toFixed(1);
+    $('#cfg-temp').oninput = e => $('#cfg-temp-v').textContent = (+e.target.value).toFixed(1);
+    $('#cfg-proxy').checked = !!cfg.proxyMode;
+    $('#cfg-imgbase').value = cfg.imgBaseURL || '';
+    $('#cfg-imgkey').value = cfg.imgApiKey || '';
+    $('#cfg-imgmodel').value = cfg.imgModel || '';
+    // 保存
+    $('#cfg-save').onclick = () => {
+      Prefs.set({
+        baseURL: $('#cfg-base').value.trim(),
+        apiKey: $('#cfg-key').value.trim(),
+        model: $('#cfg-model').value.trim() || 'deepseek-chat',
+        temperature: +$('#cfg-temp').value,
+        proxyMode: $('#cfg-proxy').checked,
+        imgBaseURL: $('#cfg-imgbase').value.trim(),
+        imgApiKey: $('#cfg-imgkey').value.trim(),
+        imgModel: $('#cfg-imgmodel').value.trim()
+      });
+      toast('配置已保存', 'ok');
+      logAdd('设置', '更新 AI 配置');
+    };
+    // 测试连接
+    $('#cfg-test').onclick = async () => {
+      const btn = $('#cfg-test');
+      btn.disabled = true;
+      btn.textContent = '⏳ 测试中…';
+      $('#cfg-result').textContent = '';
+      try {
+        const t = await AI.test();
+        $('#cfg-result').textContent = '✅ 连接成功：' + t;
+        toast('连接成功', 'ok');
+        logAdd('设置', 'AI 连接测试成功');
+      } catch (e) {
+        $('#cfg-result').textContent = '❌ ' + e.message;
+        toast('连接失败', 'err');
+        logAdd('设置', 'AI 连接测试失败: ' + e.message);
+      }
+      btn.disabled = false;
+      btn.textContent = '🔌 测试连接';
+    };
+    // 数据管理
+    $('#btn-export').onclick = async () => {
+      const json = await exportProject();
+      download('小说工程备份-' + new Date().toISOString().slice(0, 10) + '.json', json, 'application/json');
+      toast('已导出工程备份', 'ok');
+      logAdd('数据', '导出工程备份');
+    };
+    $('#btn-import').onclick = async () => {
+      const f = await filePicker('.json');
+      if (!f) return;
+      try {
+        const txt = await f.text();
+        await importProject(txt);
+        toast('导入成功', 'ok');
+        logAdd('数据', '导入工程文件');
+        location.reload();
+      } catch (e) {
+        toast('导入失败：' + e.message, 'err');
+      }
+    };
+    $('#btn-wipe').onclick = async () => {
+      if (!(await confirmDlg('确定清空本工具的全部数据吗？此操作不可恢复（建议先导出备份）！'))) return;
+      for (const s of STORES) await dbClear(s);
+      await ensureDefaults();
+      toast('已清空并重建默认数据', 'ok');
+      location.reload();
+    };
+    // 主题
+    $$('[data-theme-btn]').forEach(b => b.onclick = () => {
+      Prefs.set({ theme: b.dataset.themeBtn });
+      App.applyTheme(b.dataset.themeBtn);
+    });
+  },
+  focus() { /* 无需刷新 */ }
+};
+
+/* 占位模块（尚未开发完的页面） */
+for (const pid of ['writing', 'characters', 'world', 'sect', 'map', 'detect']) {
+  if (!PageMods[pid]) {
+    PageMods[pid] = {
+      mounted: false,
+      mount(c) { c.innerHTML = '<div class="empty-tip">🔨 「' + PAGES.find(p => p.id === pid).label + '」模块建设中，稍后可用…</div>'; },
+      focus() {}
+    };
+  }
+}
+
+;
+;/* ==== writing.js ==== */
+'use strict';
+/* ===== 写作页：章节编辑器 + AI 侧边栏（生成/采纳制/选区限定/锁定/快照回滚） ===== */
+
+const Writing = {
+  curId: null,
+  busy: false,
+
+  async mount(c) {
+    c.innerHTML = `
+      <div class="w-list">
+        <div class="w-list-h">
+          <button id="new-chapter" class="btn primary small">＋ 新章节</button>
+          <div class="spacer"></div>
+          <button id="toggle-list" class="btn small only-mobile">✕</button>
+        </div>
+        <div id="chapter-list"></div>
+      </div>
+      <div class="w-editor">
+        <div class="w-editor-h">
+          <button id="open-list" class="btn small only-mobile">☰ 章节</button>
+          <button id="open-ai" class="btn small only-drawer" title="打开 AI 对话">🤖 AI</button>
+          <input id="chap-title" class="input" placeholder="章节标题">
+          <span id="chap-count" class="count"></span>
+          <button id="btn-lock" class="btn small hide-mobile" title="锁定/解锁本章">🔒</button>
+          <button id="btn-analyze" class="btn small" title="章节写完后：AI 识别人物/势力/关系，确认后自动更新设定">🧠 章节识别</button>
+          <button id="btn-undo" class="btn small hide-mobile" title="撤销最近一次 AI 改动">↩ 撤销</button>
+          <button id="btn-copy" class="btn small">📋 复制</button>
+          <button id="btn-export-chap" class="btn small hide-mobile">📤 导出</button>
+          <button id="btn-del-chap" class="btn small danger hide-mobile">🗑</button>
+        </div>
+        <div class="w-selected" id="w-selected" hidden>
+          <span>已选中 <b id="sel-count">0</b> 字（AI 只会处理选中部分）：</span>
+          <button class="btn small" data-op="polish">✏️ 润色</button>
+          <button class="btn small" data-op="rewrite">✍️ 改写</button>
+          <button class="btn small" data-op="expand">📈 扩写</button>
+          <button class="btn small" data-op="condense">✂️ 精简</button>
+          <button class="btn small" data-op="ask">🤖 问 AI</button>
+          <button class="btn small" data-op="ooc">🧐 人设检查</button>
+          <button class="btn small" data-op="clear">✕ 取消选区</button>
+        </div>
+        <textarea id="chap-content" placeholder="正文…\n提示：在右侧对话框里描述你想写的内容，AI 直接生成，你确认后点「采纳」插入这里；选中一段文字可让 AI 只修改选中部分。"></textarea>
+      </div>
+      <aside class="w-ai" id="w-ai">
+        <div class="w-ai-h">
+          🤖 AI 助手
+          <span class="ctx" title="AI 会自动携带：世界观设定 + 人物卡 + 当前章节">上下文已加载</span>
+          <div class="spacer"></div>
+          <button id="toggle-ai" class="btn small">✕</button>
+        </div>
+        <div class="chat-quick">
+          <button id="qc-cont" class="btn small">✍️续写</button>
+          <button id="qc-facts" class="btn small">📋提取特征</button>
+          <button id="qc-clear" class="btn small">🗑清空对话</button>
+        </div>
+        <div id="chat-box" class="chat-box"></div>
+        <div class="chat-in">
+          <textarea id="chat-input" rows="2" placeholder="描述你想写的内容，AI 直接生成，如：主角在雨夜觉醒了控火异能，写出这一段…"></textarea>
+          <button id="chat-send" class="btn primary">发送</button>
+        </div>
+      </aside>`;
+
+    this.c = c;
+    this.bind();
+    await this.refreshList();
+    const chapters = await dbAll('chapters');
+    if (chapters.length) await this.open(chapters[0].id);
+    await this.renderChat();
+    // 对话式写作：非电脑端默认展开 AI 对话面板
+    if (DEVICE !== 'pc') setTimeout(() => $('#w-ai').classList.add('open'), 80);
+  },
+
+  async focus() {
+    await this.refreshList();
+    if (this.curId) {
+      const ch = await dbGet('chapters', this.curId);
+      if (ch) this.renderEditor(ch);
+    }
+    await this.renderChat();
+  },
+
+  bind() {
+    const c = this.c;
+    $('#new-chapter', c).onclick = async () => {
+      const title = await promptDlg('新章节', '第' + ((await dbAll('chapters')).length + 1) + '章', '章节标题');
+      if (!title) return;
+      const ch = { id: uid(), title, outline: [], content: '', locked: false, snapshots: [], createdAt: Date.now(), updatedAt: Date.now() };
+      await dbPut('chapters', ch);
+      await logAdd('章节', '新建章节「' + title + '」');
+      await this.refreshList();
+      await this.open(ch.id);
+    };
+    $('#open-list', c).onclick = () => $('.w-list', c).classList.add('open');
+    $('#toggle-list', c).onclick = () => $('.w-list', c).classList.remove('open');
+    $('#open-ai', c).onclick = () => { $('#w-ai').classList.add('open'); };
+    $('#toggle-ai', c).onclick = () => { $('#w-ai').classList.remove('open'); };
+
+    // 标题
+    const titleInp = $('#chap-title', c);
+    titleInp.oninput = debounce(() => this.saveCur({ title: titleInp.value }), 500);
+
+    // 正文
+    const ta = $('#chap-content', c);
+    const debounceSave = debounce(() => this.saveCur({ content: ta.value }), 800);
+    ta.oninput = () => { this.updateCount(); debounceSave(); };
+    const updSel = () => {
+      const n = ta.selectionEnd - ta.selectionStart;
+      const bar = $('#w-selected', c);
+      if (n > 0 && !ta.readOnly) { $('#sel-count', c).textContent = n; bar.hidden = false; }
+      else bar.hidden = true;
+    };
+    ta.addEventListener('select', updSel);
+    ta.addEventListener('keyup', updSel);
+    ta.addEventListener('mouseup', updSel);
+    ta.addEventListener('touchend', updSel);
+
+    // 选区操作
+    $$('[data-op]', c).forEach(b => b.onclick = () => {
+      const op = b.dataset.op;
+      if (op === 'clear') { ta.focus(); ta.setSelectionRange(ta.selectionEnd, ta.selectionEnd); updSel(); return; }
+      this.selectionOp(op);
+    });
+
+    // AI 续写 / 清空对话 / 提取特征
+    $('#qc-cont', c).onclick = () => this.continueWrite();
+    $('#qc-clear', c).onclick = async () => {
+      if (!(await confirmDlg('清空与 AI 的对话记录？（不影响正文）'))) return;
+      await dbPut('chat', { id: 'chat', messages: [] });
+      this.renderChat();
+    };
+    // 提取特征（人物页模块提供）
+    $('#qc-facts', c).onclick = async () => {
+      if (typeof CharOps !== 'undefined' && CharOps.extractFromChapter) {
+        try {
+          const n = await CharOps.extractFromChapter(this.curId);
+          toast('识别到 ' + n + ' 条特征，去「人物」页确认采纳', 'ok');
+        } catch (e) { toast('提取失败：' + e.message, 'err'); }
+      } else toast('人物模块尚未就绪', 'err');
+    };
+
+    // 发送聊天
+    const send = async () => {
+      const inp = $('#chat-input', c);
+      const text = inp.value.trim();
+      if (!text || this.busy) return;
+      inp.value = '';
+      await this.chatAsk(text, { kind: 'chat' });
+    };
+    $('#chat-send', c).onclick = send;
+    $('#chat-input', c).addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+
+    // 工具栏
+    $('#btn-lock', c).onclick = async () => {
+      const ch = await this.getCur();
+      if (!ch) return;
+      const newLocked = !ch.locked;
+      if (ch.locked && !(await confirmDlg('解锁本章？解锁后 AI 才可以修改本章内容。'))) return;
+      ch.locked = newLocked; // 同步内存对象，保证 UI 立即刷新
+      await this.saveCur({ locked: newLocked });
+      await logAdd('章节', (newLocked ? '锁定' : '解锁') + '章节「' + ch.title + '」');
+      this.renderEditor(ch);
+      this.refreshList();
+      toast(newLocked ? '已锁定（AI 无法修改本章）' : '已解锁', 'ok');
+    };
+    $('#btn-analyze', c).onclick = () => this.analyzeChapter();
+    $('#btn-undo', c).onclick = async () => {
+      const ch = await this.getCur();
+      if (!ch || !ch.snapshots.length) { toast('没有可撤销的 AI 改动', 'err'); return; }
+      if (!(await confirmDlg('撤销最近一次 AI 改动？'))) return;
+      const snap = ch.snapshots.pop();
+      ch.content = snap.content;
+      await this.saveCur({ content: ch.content, snapshots: ch.snapshots });
+      await logAdd('撤销', '撤销 AI 改动（章节「' + ch.title + '」）');
+      this.renderEditor(ch);
+      toast('已撤销', 'ok');
+    };
+    $('#btn-copy', c).onclick = async () => {
+      const ch = await this.getCur();
+      if (ch) copyText(ch.content);
+    };
+    $('#btn-export-chap', c).onclick = async () => {
+      const ch = await this.getCur();
+      if (ch) download((ch.title || '章节') + '.txt', ch.content);
+    };
+    $('#btn-del-chap', c).onclick = async () => {
+      const ch = await this.getCur();
+      if (!ch) return;
+      if (!(await confirmDlg('删除章节「' + ch.title + '」？此操作不可恢复！'))) return;
+      await dbDel('chapters', ch.id);
+      await logAdd('章节', '删除章节「' + ch.title + '」');
+      this.curId = null;
+      const chapters = await dbAll('chapters');
+      if (chapters.length) await this.open(chapters[0].id);
+      else { this.curId = null; $('#chap-title', c).value = ''; $('#chap-content', c).value = ''; this.updateCount(); }
+      this.refreshList();
+    };
+  },
+
+  /* ---------- 数据 ---------- */
+  async getCur() { return this.curId ? await dbGet('chapters', this.curId) : null; },
+  async saveCur(patch) {
+    const ch = await this.getCur();
+    if (!ch) return;
+    Object.assign(ch, patch);
+    ch.updatedAt = Date.now();
+    await dbPut('chapters', ch);
+  },
+  updateCount() {
+    const ta = $('#chap-content', this.c);
+    $('#chap-count', this.c).textContent = ta ? wordCount(ta.value) + ' 字' : '';
+  },
+
+  async refreshList() {
+    const chapters = await dbAll('chapters');
+    chapters.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    const box = $('#chapter-list', this.c);
+    box.innerHTML = '';
+    for (const ch of chapters) {
+      box.appendChild(el('div', {
+        class: 'chap-item' + (ch.id === this.curId ? ' on' : ''),
+        onclick: () => this.open(ch.id)
+      },
+        el('span', { text: ch.locked ? '🔒' : '' }),
+        el('span', { class: 't', text: ch.title }),
+        el('span', { class: 'c', text: wordCount(ch.content) })
+      ));
+    }
+  },
+
+  async open(id) {
+    // 保存旧章节（输入框中的最新值）
+    if (this.curId) {
+      const old = await dbGet('chapters', this.curId);
+      if (old) {
+        const ta = $('#chap-content', this.c);
+        if (ta && ta.value !== old.content) await this.saveCur({ content: ta.value });
+      }
+    }
+    this.curId = id;
+    const ch = await dbGet('chapters', id);
+    if (!ch) return;
+    this.renderEditor(ch);
+    this.refreshList();
+  },
+
+  renderEditor(ch) {
+    $('#chap-title', this.c).value = ch.title || '';
+    $('#chap-content', this.c).value = ch.content || '';
+    $('#chap-content', this.c).readOnly = !!ch.locked;
+    $('#btn-lock', this.c).textContent = ch.locked ? '🔓 解锁' : '🔒 锁定';
+    this.updateCount();
+  },
+
+  /* ---------- AI ---------- */
+  setBusy(b) {
+    this.busy = b;
+    const c = this.c;
+    $('#qc-cont', c).disabled = b; $('#chat-send', c).disabled = b; $('#btn-analyze', c).disabled = b;
+  },
+
+  async buildUserContext() {
+    const ctx = await AI.projectContext({ chapterId: this.curId });
+    return '你是资深网文写作助手。写作要求：文笔流畅，避免 AI 腔（不堆排比、不每段总结、少用"然而/不禁/仿佛"）。' +
+      '人设铁律：所有人物言行必须严格符合其【人物卡】中的性格与说话风格，人设崩塌是严重错误；除非用户明确要求，否则不得改变任何人设。' +
+      '铁律：绝不修改用户已写内容，只在你被要求的范围内输出。\n\n以下是你的项目记忆：\n' + ctx.text;
+  },
+
+  async chatAsk(text, meta = { kind: 'chat' }) {
+    if (this.busy) return;
+    const chat = await dbGet('chat', 'chat') || { id: 'chat', messages: [] };
+    chat.messages.push({ role: 'user', content: text, ts: Date.now() });
+    await dbPut('chat', chat);
+    this.renderChat();
+    const sys = await this.buildUserContext();
+    const hist = chat.messages.slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+    this.setBusy(true);
+    try {
+      const reply = await AI.chat([{ role: 'system', content: sys }, ...hist]);
+      chat.messages.push({ role: 'assistant', content: reply, ts: Date.now(), meta: { ...meta, reqText: text } });
+      await dbPut('chat', chat);
+      await logAdd('AI对话', (meta.kind === 'chat' ? '对话：' : meta.label || '生成') + text.slice(0, 30));
+    } catch (e) {
+      chat.messages.push({ role: 'assistant', content: '⚠️ ' + e.message, ts: Date.now(), meta: { err: true } });
+      await dbPut('chat', chat);
+      toast(e.message, 'err');
+    }
+    this.setBusy(false);
+    this.renderChat();
+  },
+
+  /* 续写（不选中任何内容时，AI 只能在文末续写） */
+  async continueWrite() {
+    const ch = await this.getCur();
+    if (!ch) return;
+    if (ch.locked) { toast('本章已锁定，无法续写', 'err'); return; }
+    const tail = (ch.content || '').slice(-300);
+    const text = `接着我的小说《${ch.title}》继续往下写（只能续写，不能改动我已有的内容），300~500 字，保持现有风格和视角。\n当前文末：${tail ? '……' + tail : '（本章还没有正文，请从开头写起）'}`;
+    await this.chatAsk(text, { kind: 'cont', label: '续写' });
+  },
+
+  /* 🧠 章节识别：AI 识别人物/势力/关系 → 面板逐条确认 → 确认后自动更新 */
+  async analyzeChapter() {
+    const ch = await this.getCur();
+    if (!ch) return;
+    if (ch.locked) { toast('本章已锁定，请先解锁再识别', 'err'); return; }
+    this.setBusy(true);
+    toast('🧠 AI 正在识别人物与势力…', 'info');
+    try {
+      const data = await CharOps.analyzeChapter(ch.id);
+      await this.showRecognitionPanel(data, ch);
+    } catch (e) {
+      toast('识别失败：' + e.message, 'err');
+    } finally {
+      this.setBusy(false); // 无论何种情况都恢复按钮与 AI 对话
+    }
+  },
+
+  async showRecognitionPanel(data, ch) {
+    const sections = [
+      { key: 'people', icon: '👤', title: '新人物' },
+      { key: 'factions', icon: '🏯', title: '新势力' },
+      { key: 'memberships', icon: '🔗', title: '人物归属' },
+      { key: 'relations', icon: '💞', title: '人物关系' },
+      { key: 'updates', icon: '📌', title: '已有人物新信息' }
+    ];
+    const pending = {};
+    for (const s of sections) pending[s.key] = Array.isArray(data[s.key]) ? data[s.key].slice() : [];
+    const total = sections.reduce((n, s) => n + pending[s.key].length, 0);
+    if (!total) { toast('本章未识别到新的人物/势力/关系信息', 'info'); return; }
+    const stats = { people: 0, factions: 0, memberships: 0, relations: 0, updates: 0 };
+    let done = 0;
+    const body = el('div', {});
+    const descOf = (s, item) => {
+      if (s === 'people') return `${item.name}${item.personality ? ' · ' + item.personality : ''}${(item.skills || []).length ? ' · 技能：' + item.skills.map(x => x.name).join('、') : ''}`;
+      if (s === 'factions') return `${item.name}（${item.type || '势力'}）${item.desc ? '：' + item.desc : ''}${(item.members || []).length ? ' · 成员：' + item.members.join('、') : ''}`;
+      if (s === 'memberships') return `${item.person} → ${item.faction}${item.role ? ' · ' + item.role : ''}`;
+      if (s === 'relations') return `${item.a} ↔ ${item.b}（${item.type}）`;
+      return `${item.person}：${(item.newFacts || []).join('；')}`;
+    };
+    const renderList = () => {
+      body.innerHTML = '';
+      let left = 0;
+      for (const s of sections) {
+        const items = pending[s.key];
+        if (!items.length) continue;
+        left += items.length;
+        body.appendChild(el('div', { style: 'font-weight:700;margin:12px 0 6px', text: s.icon + ' ' + s.title + '（' + items.length + ' 条）' }));
+        for (const item of items) {
+          const row = el('div', { style: 'display:flex;gap:8px;align-items:center;padding:7px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;flex-wrap:wrap;background:var(--bg)' },
+            el('span', { text: descOf(s.key, item), style: 'flex:1;min-width:150px;font-size:13.5px;line-height:1.6' }),
+            el('button', { class: 'btn small primary', text: '✅ 采纳', onclick: async () => {
+              const ok2 = await CharOps.applyItem(s.key, item);
+              if (!ok2 && s.key === 'memberships') { toast('该势力尚未创建，请先采纳对应「新势力」', 'err'); return; }
+              pending[s.key] = pending[s.key].filter(x => x !== item);
+              done++; stats[s.key]++;
+              renderList();
+            } }),
+            el('button', { class: 'btn small', text: '✗ 忽略', onclick: async () => {
+              pending[s.key] = pending[s.key].filter(x => x !== item);
+              done++;
+              renderList();
+            } }),
+            s.key !== 'updates' ? el('button', { class: 'btn small', text: '✏️ 修改', onclick: async () => {
+              const field = s.key === 'people' ? '姓名' : s.key === 'factions' ? '势力名' : s.key === 'memberships' ? '职位' : '关系类型';
+              const cur = s.key === 'memberships' ? (item.role || '') : s.key === 'relations' ? (item.type || '') : (item.name || '');
+              const v = await promptDlg('修改' + field, cur);
+              if (v) {
+                if (s.key === 'memberships') item.role = v;
+                else if (s.key === 'relations') item.type = v;
+                else item.name = v;
+                renderList();
+              }
+            } }) : null
+          );
+          body.appendChild(row);
+        }
+      }
+      const bar = $('#rec-progress');
+      if (bar) bar.textContent = left ? `⏳ 剩余 ${left} 条待确认（采纳后自动更新到人物/势力）` : '✅ 全部处理完毕，可关闭';
+    };
+    body.appendChild(el('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px' },
+      el('span', { id: 'rec-progress', class: 'muted' }),
+      el('button', { class: 'btn small danger', text: '全部忽略', onclick: async () => {
+        if (!(await confirmDlg('忽略本次识别的全部 ' + (total - done) + ' 条？'))) return;
+        for (const s of sections) pending[s.key] = [];
+        done = total;
+        renderList();
+      } })
+    ));
+    renderList();
+    await modal({
+      title: `🧠 章节识别结果 · 《${ch.title}》`,
+      body,
+      okText: '✔ 完成',
+      cancelText: '关闭',
+      cancelable: true
+    });
+    const parts = [
+      ['人物', stats.people], ['势力', stats.factions], ['归属', stats.memberships], ['关系', stats.relations], ['更新', stats.updates]
+    ].filter(p => p[1] > 0).map(p => p[0] + ' ' + p[1]).join(' · ');
+    await logAdd('检测', '章节识别完成（《' + ch.title + '》' + (parts ? '：采纳 ' + parts : '，无采纳') + '）');
+    toast(parts ? '已更新：' + parts : '未采纳任何条目', parts ? 'ok' : 'info');
+  },
+
+  /* 选区操作：AI 只处理选中的文字 */
+  async selectionOp(op) {
+    const ta = $('#chap-content', this.c);
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const sel = ta.value.slice(start, end);
+    if (!sel || !sel.trim()) { toast('请先在正文中选中一段文字', 'err'); return; }
+    const ch = await this.getCur();
+    if (ch && ch.locked) { toast('本章已锁定，无法修改', 'err'); return; }
+    const OPS = {
+      polish:   { label: '润色',      user: '请润色下面这段文字：保持原意与风格，只优化表达，直接输出润色后的段落。' },
+      rewrite:  { label: '改写',      user: '请改写下面这段文字：可以调整表达方式与节奏，使其更有网文味，直接输出改写后的段落。' },
+      expand:   { label: '扩写',      user: '请扩写下面这段文字：丰富细节、氛围与动作，扩充到 300~500 字，直接输出扩写后的段落。' },
+      condense: { label: '精简',      user: '请精简下面这段文字：压缩到原来的一半左右，保留关键信息，直接输出精简后的段落。' },
+      ask:      { label: '询问',      user: null },
+      ooc:      { label: '人设检查',  user: null, report: true }
+    };
+    const cfg = OPS[op];
+    let text;
+    if (op === 'ask') {
+      const q = await promptDlg('你想问 AI 什么？', '', '例如：这段的节奏是不是太慢了？');
+      if (!q) return;
+      text = `针对我选中的这段文字：\n"""\n${sel}\n"""\n\n我的问题：${q}\n请只回答这个问题，不要改动文字。`;
+    } else if (op === 'ooc') {
+      text = `检查下面这段文字中每个人物的言行是否符合其【人物卡】中的性格与说话风格。\n"""\n${sel}\n"""\n` +
+        '输出格式：先列出发现问题的人物与崩塌点（引用原文），再给修改建议。若没有问题则说明"人设一致，无崩塌"。只做检查与建议，不要修改文本。';
+    } else {
+      text = cfg.user + `\n"""\n${sel}\n"""`;
+    }
+    // 保存选区位置，用于"替换选中部分"
+    await this.chatAsk(text, { kind: op === 'ooc' ? 'ooc' : 'sel', op, label: cfg.label, selStart: start, selEnd: end, sel });
+  },
+
+  /* 渲染对话 */
+  async renderChat() {
+    const chat = await dbGet('chat', 'chat') || { id: 'chat', messages: [] };
+    const box = $('#chat-box', this.c);
+    box.innerHTML = '';
+    if (!chat.messages.length) {
+      box.innerHTML = '<div class="empty-tip">和 AI 对话吧：<br>· 点「✨生成」按细纲写下一段<br>· 点「✍️续写」接着写<br>· 选中正文文字 → 让 AI 只改选中部分<br>· 随便聊剧情、设定</div>';
+      return;
+    }
+    for (const m of chat.messages) {
+      const div = el('div', { class: 'msg ' + (m.role === 'user' ? 'user' : 'ai') });
+      div.textContent = m.content;
+      const meta = m.meta || {};
+      if (m.role === 'assistant' && !meta.err && meta.kind !== 'ooc') {
+        div.appendChild(el('div', { class: 'acts' },
+          el('button', { class: 'btn small primary', text: meta.kind === 'sel' ? '✅ 替换选中部分' : '✅ 采纳插入正文', onclick: () => this.applyReply(m) }),
+          el('button', { class: 'btn small', text: '🔄 换一版', onclick: async () => {
+            const req = meta.reqText;
+            await this.chatAsk(req, meta);
+          } }),
+          el('button', { class: 'btn small', text: '👉 继续写', onclick: async () => {
+            await this.chatAsk('接着你刚写的这段继续写下去，300~500 字，风格保持一致。', { kind: 'cont', label: '继续写' });
+          } })
+        ));
+      }
+      div.appendChild(el('div', { class: 'meta', text: new Date(m.ts || Date.now()).toLocaleTimeString('zh-CN', { hour12: false }) + (meta.label ? ' · ' + meta.label : '') }));
+      box.appendChild(div);
+    }
+    box.scrollTop = box.scrollHeight;
+  },
+
+  /* 采纳 AI 回复：插入正文（先快照，可回滚） */
+  async applyReply(msg) {
+    const meta = msg.meta || {};
+    if (meta.kind === 'ooc') { toast('人设检查是报告，不直接修改文本', 'info'); return; }
+    const ch = await this.getCur();
+    if (!ch) return;
+    if (ch.locked) { toast('本章已锁定', 'err'); return; }
+    const ta = $('#chap-content', this.c);
+    const text = (msg.content || '').replace(/^["'“”]+|["'“”]+$/g, '').trim();
+    if (!text) return;
+    // 快照
+    ch.snapshots = ch.snapshots || [];
+    ch.snapshots.push({ time: Date.now(), content: ch.content });
+    if (ch.snapshots.length > 15) ch.snapshots.shift();
+    // 插入位置：选区操作替换选中部分；否则插入光标处（有光标）或文末
+    if (meta.kind === 'sel' && typeof meta.selStart === 'number') {
+      ch.content = ch.content.slice(0, meta.selStart) + text + ch.content.slice(meta.selEnd);
+    } else if (ta === document.activeElement && ta.selectionStart != null && ta.selectionStart !== ta.selectionEnd) {
+      const s = ta.selectionStart, e = ta.selectionEnd;
+      ch.content = ch.content.slice(0, s) + text + ch.content.slice(e);
+    } else if (ta === document.activeElement && ta.selectionStart != null) {
+      const s = ta.selectionStart;
+      ch.content = ch.content.slice(0, s) + text + ch.content.slice(s);
+    } else {
+      ch.content = (ch.content || '') + (ch.content ? '\n\n' : '') + text;
+    }
+    ch.updatedAt = Date.now();
+    await dbPut('chapters', ch);
+    await logAdd('采纳', '采纳 AI 文本（章节「' + ch.title + '」，' + wordCount(text) + ' 字）');
+    this.renderEditor(ch);
+    this.refreshList();
+    toast('已插入正文（可点「↩ 撤销」回滚）', 'ok');
+  }
+};
+
+PageMods.writing = Writing;
+
+;
+;/* ==== characters.js ==== */
+'use strict';
+/* ===== 人物页：卡片 / 详情 / AI 特征待确认 / 关系图 ===== */
+
+const CharOps = {
+  /* 轻量：从章节提取特征（进待确认区，不直接写入） */
+  async extractFromChapter(chapterId) {
+    const ch = await dbGet('chapters', chapterId);
+    if (!ch || !(ch.content || '').trim()) { toast('本章还没有正文', 'err'); return 0; }
+    const ctx = await AI.projectContext({ chapterId });
+    const sys = '你是小说设定整理助手。从给定章节正文中识别出：出现了哪些人物，以及关于这些人物/地点的明确特征描述（外貌、身高、性格、能力、身份、关系等）。' +
+      '只提取原文明确写出的信息，不要臆测。\n\n' + ctx.text;
+    const user = '以下是章节《' + ch.title + '》的正文：\n"""\n' + ch.content.slice(0, 8000) + '\n"""\n' +
+      '请输出：{"facts":[{"name":"人物或地点名","fact":"具体特征描述（尽量简短明确，如：身高1米7）","source":"第X段或原文摘录"}]}';
+    const data = await AI.json([{ role: 'system', content: sys }, { role: 'user', content: user }]);
+    const facts = (data.facts || []).filter(f => f && f.name && f.fact);
+    for (const f of facts) {
+      let chObj = (await dbAll('characters')).find(x => x.name === f.name);
+      if (!chObj) {
+        chObj = { id: uid(), name: f.name, emoji: '👤', bio: '', personality: '', speechStyle: '', skills: [], faction: null, facts: [], relations: [], createdAt: Date.now(), updatedAt: Date.now() };
+        await dbPut('characters', chObj);
+        await logAdd('人物', 'AI 识别到新人物「' + f.name + '」（待确认）');
+      }
+      chObj.facts = chObj.facts || [];
+      if (!chObj.facts.some(x => x.text === f.fact)) {
+        chObj.facts.push({ text: f.fact, source: (f.source || ch.title), confirmed: false, at: Date.now() });
+        await dbPut('characters', chObj);
+      }
+    }
+    return facts.length;
+  },
+
+  /* 完整识别：章节定稿后一键识别 新人物/新势力/人物归属/人物关系/已有条目更新 */
+  async analyzeChapter(chapterId) {
+    const ch = await dbGet('chapters', chapterId);
+    if (!ch || !(ch.content || '').trim()) throw new Error('本章还没有正文');
+    const ctx = await AI.projectContext({ chapterId });
+    const chars = await dbAll('characters');
+    const tree = (await dbGet('sect', 'tree')) || { id: 'tree', nodes: [] };
+    const knownPeople = chars.map(c => c.name);
+    const knownFactions = tree.nodes.map(n => n.name);
+    const sys = '你是小说设定整理助手。阅读章节正文，识别：【新人物】、【新势力】、【人物归属】、【人物关系】、【已有人物的新信息】。\n' +
+      '规则：只输出正文明确写到的；不要臆测；不要与已知设定矛盾。\n' +
+      '已知人物：' + (knownPeople.join('、') || '（无）') + '\n已知势力：' + (knownFactions.join('、') || '（无）') + '\n\n' + ctx.text;
+    const user = '章节《' + ch.title + '》正文：\n"""\n' + ch.content.slice(0, 12000) + '\n"""\n' +
+      '输出JSON：\n' +
+      '{"people":[{"name":"姓名","bio":"简介(可选)","personality":"性格(可选)","speechStyle":"说话风格(可选)","skills":[{"name":"技能名","desc":"描述(可选)"}]}],\n' +
+      '"factions":[{"name":"势力名","type":"宗门/家族/帮派等","desc":"描述(可选)","members":["成员人名"]}],\n' +
+      '"memberships":[{"person":"人名","faction":"势力名","role":"职位"}],\n' +
+      '"relations":[{"a":"人名A","b":"人名B","type":"师徒/恋人/仇敌等"}],\n' +
+      '"updates":[{"person":"已有人名","newFacts":["新信息1","新信息2"]}]}\n' +
+      'people/factions 只放已知列表里【不存在】的；relations 双方都必须是人物名；updates 只放已有人物的新信息；都没有就输出空数组。';
+    return await AI.json([{ role: 'system', content: sys }, { role: 'user', content: user }]);
+  },
+
+  /* 执行单条确认结果（用户采纳后调用） */
+  async applyItem(kind, item) {
+    try {
+      if (kind === 'people') {
+        const obj = {
+          id: uid(), name: item.name, emoji: '👤', bio: item.bio || '', personality: item.personality || '',
+          speechStyle: item.speechStyle || '', skills: (item.skills || []).map(s => ({ name: s.name, desc: s.desc || '' })),
+          faction: null, facts: [], relations: [], createdAt: Date.now(), updatedAt: Date.now()
+        };
+        await dbPut('characters', obj);
+        await logAdd('人物', '章节识别采纳：新建人物「' + obj.name + '」');
+        return true;
+      }
+      if (kind === 'factions') {
+        const tree = (await dbGet('sect', 'tree')) || { id: 'tree', nodes: [] };
+        const node = { id: uid(), parentId: null, name: item.name, role: item.type || '', note: item.desc || '', characterId: null };
+        tree.nodes.push(node);
+        await dbPut('sect', tree);
+        await logAdd('势力', '章节识别采纳：新建势力「' + node.name + '」');
+        return true;
+      }
+      if (kind === 'memberships') {
+        const chars = await dbAll('characters');
+        const tree = (await dbGet('sect', 'tree')) || { id: 'tree', nodes: [] };
+        const person = chars.find(c => c.name === item.person);
+        const node = tree.nodes.find(n => n.name === item.faction);
+        if (person && node) {
+          person.faction = { nodeId: node.id, role: item.role || '', name: node.name };
+          await dbPut('characters', person);
+          await logAdd('人物', '章节识别采纳：' + person.name + ' 归属 ' + node.name + (item.role ? '·' + item.role : ''));
+          return true;
+        }
+        return false; // 势力还没建（用户未采纳该势力）
+      }
+      if (kind === 'relations') {
+        const chars = await dbAll('characters');
+        const a = chars.find(c => c.name === item.a);
+        const b = chars.find(c => c.name === item.b);
+        if (a && b && a.id !== b.id) {
+          if (!(a.relations || []).some(r => r.targetId === b.id)) { a.relations = a.relations || []; a.relations.push({ targetId: b.id, targetName: b.name, type: item.type }); }
+          if (!(b.relations || []).some(r => r.targetId === a.id)) { b.relations = b.relations || []; b.relations.push({ targetId: a.id, targetName: a.name, type: item.type }); }
+          await dbPut('characters', a);
+          await dbPut('characters', b);
+          await logAdd('人物', '章节识别采纳：关系 ' + a.name + '↔' + b.name + '（' + item.type + '）');
+          return true;
+        }
+        return false;
+      }
+      if (kind === 'updates') {
+        const chars = await dbAll('characters');
+        const person = chars.find(c => c.name === item.person);
+        if (person) {
+          person.facts = person.facts || [];
+          for (const f of (item.newFacts || [])) {
+            if (f && !person.facts.some(x => x.text === f)) person.facts.push({ text: f, source: '章节识别', confirmed: true, at: Date.now() });
+          }
+          await dbPut('characters', person);
+          await logAdd('人物', '章节识别采纳：更新「' + person.name + '」' + (item.newFacts || []).length + ' 条信息');
+          return true;
+        }
+        return false;
+      }
+      return false;
+    } catch (e) {
+      toast('执行失败：' + e.message, 'err');
+      return false;
+    }
+  }
+};
+
+const Characters = {
+  mounted: false,
+  async mount(c) {
+    this.c = c;
+    c.innerHTML = `
+      <div class="page-inner">
+        <div class="page-title">
+          👥 人物
+          <div class="spacer"></div>
+          <button id="char-add" class="btn primary small">＋ 新人物</button>
+          <button id="char-view" class="btn small">${Prefs.get().charView === 'graph' ? '📋 卡片视图' : '🕸️ 关系图'}</button>
+        </div>
+        <div id="char-body"></div>
+      </div>`;
+    $('#char-add', c).onclick = async () => {
+      const name = await promptDlg('新人物', '', '人物名字');
+      if (!name) return;
+      const obj = { id: uid(), name, emoji: '👤', bio: '', personality: '', speechStyle: '', skills: [], faction: null, facts: [], relations: [], createdAt: Date.now(), updatedAt: Date.now() };
+      await dbPut('characters', obj);
+      await logAdd('人物', '新建人物「' + name + '」');
+      this.render();
+    };
+    $('#char-view', c).onclick = () => {
+      const g = Prefs.get().charView === 'graph';
+      Prefs.set({ charView: g ? 'cards' : 'graph' });
+      $('#char-view', c).textContent = g ? '🕸️ 关系图' : '📋 卡片视图';
+      this.render();
+    };
+    await this.render();
+  },
+  async focus() { if (this.mounted) await this.render(); },
+
+  async render() {
+    const chars = await dbAll('characters');
+    const body = $('#char-body', this.c);
+    if (!chars.length) { body.innerHTML = '<div class="empty-tip">还没有人物。<br>· 点「＋ 新人物」手动添加<br>· 或在写作页点「📋提取特征」，让 AI 从正文里识别人物和特征（识别结果会进入「待确认」，不会直接写入）</div>'; return; }
+    if (Prefs.get().charView === 'graph') { this.renderGraph(chars, body); return; }
+    body.innerHTML = '';
+    const grid = el('div', { class: 'char-grid' });
+    for (const ch of chars) {
+      const pend = (ch.facts || []).filter(f => !f.confirmed).length;
+      grid.appendChild(el('div', { class: 'card char-card', onclick: () => this.openDetail(ch.id) },
+        el('div', { class: 'name', html: ch.emoji + ' ' + esc(ch.name) + (pend ? ` <span class="count">(${pend} 条待确认)</span>` : '') }),
+        el('div', { class: 'bio', text: ch.bio || '（暂无简介）' }),
+        ch.personality ? el('div', { class: 'muted', style: 'margin-top:4px', text: '🧠 ' + ch.personality + (ch.speechStyle ? ' · 🗣 ' + ch.speechStyle : '') }) : null,
+        el('div', { class: 'muted', style: 'margin-top:4px', text:
+          [ch.faction && ch.faction.nodeId ? '🏳️ 隶属势力' : null,
+           (ch.skills || []).length ? '⚔️ 技能 ' + ch.skills.length + ' 项' : null,
+           (ch.facts || []).filter(f => f.confirmed).length ? '特征 ' + (ch.facts || []).filter(f => f.confirmed).length + ' 条' : null,
+           (ch.relations || []).length ? '关系 ' + ch.relations.length + ' 条' : null].filter(Boolean).join(' · ')
+        })
+      ));
+    }
+    body.appendChild(grid);
+  },
+
+  /* 详情弹窗 */
+  async openDetail(id) {
+    const ch = await dbGet('characters', id);
+    if (!ch) return;
+    const relNames = (ch.relations || []).map(r => r.targetName || '?').join('、');
+    const body = el('div', { style: 'display:flex;flex-direction:column;gap:12px' });
+    body.appendChild(el('div', {},
+      el('label', { class: 'muted', text: '名字' }),
+      el('input', { id: 'd-name', class: 'input', style: 'width:100%', value: ch.name }),
+      el('label', { class: 'muted', text: '表情（可选）' }),
+      el('input', { id: 'd-emoji', class: 'input', style: 'width:100%', value: ch.emoji || '👤' })
+    ));
+    body.appendChild(el('div', {},
+      el('label', { class: 'muted', text: '简介' }),
+      el('textarea', { id: 'd-bio', class: 'input', style: 'width:100%;min-height:70px', html: esc(ch.bio || '') })
+    ));
+    body.appendChild(el('div', {},
+      el('label', { class: 'muted', text: '性格（AI 写作时严格遵守，人设崩塌是严重错误）' }),
+      el('textarea', { id: 'd-personality', class: 'input', style: 'width:100%;min-height:50px', html: esc(ch.personality || ''), placeholder: '如：活泼开朗、胆大心细、表面冷酷内心温柔' }),
+      el('label', { class: 'muted', text: '说话风格（AI 生成对话时模仿）' }),
+      el('textarea', { id: 'd-speech', class: 'input', style: 'width:100%;min-height:50px', html: esc(ch.speechStyle || ''), placeholder: '如：爱开玩笑爱用谐音梗 / 惜字如金只说重点 / 说话带方言口癖' })
+    ));
+    // 功法/技能/擅长
+    const skBox = el('div', {});
+    skBox.appendChild(el('div', { class: 'muted', style: 'margin:4px 0', text: '功法 / 技能 / 擅长' }));
+    for (const s of (ch.skills || [])) {
+      skBox.appendChild(el('div', { style: 'display:flex;gap:8px;align-items:center;font-size:13px;padding:3px 0' },
+        el('span', { text: '· ' + s.name + (s.desc ? '（' + s.desc + '）' : ''), style: 'flex:1' }),
+        el('button', { class: 'btn small danger', text: '删', onclick: async () => {
+          ch.skills = (ch.skills || []).filter(x => x !== s);
+          await dbPut('characters', ch);
+          this.openDetail(id);
+        } })
+      ));
+    }
+    const addSkill = el('div', { style: 'display:flex;gap:6px;align-items:center' });
+    addSkill.appendChild(el('input', { id: 'sk-name', class: 'input', style: 'flex:2;min-width:0', placeholder: '如：降龙十八掌' }));
+    addSkill.appendChild(el('input', { id: 'sk-desc', class: 'input', style: 'flex:3;min-width:0', placeholder: '描述（可选）' }));
+    addSkill.appendChild(el('button', { class: 'btn small primary', text: '＋', onclick: async () => {
+      const n = $('#sk-name', body).value.trim();
+      if (!n) { toast('先填技能名称', 'err'); return; }
+      ch.skills = ch.skills || [];
+      ch.skills.push({ name: n, desc: $('#sk-desc', body).value.trim() });
+      await dbPut('characters', ch);
+      await logAdd('人物', '添加技能「' + n + '」（' + ch.name + '）');
+      this.openDetail(id);
+    } }));
+    skBox.appendChild(addSkill);
+    body.appendChild(skBox);
+    // 隶属势力
+    const tree = await dbGet('sect', 'tree') || { nodes: [] };
+    const fb = el('div', {});
+    fb.appendChild(el('div', { class: 'muted', style: 'margin:4px 0', text: '隶属势力（先在「势力」页建好组织结构）' }));
+    const fSel = el('select', { id: 'fSel', class: 'input', style: 'width:100%' });
+    fSel.appendChild(el('option', { value: '', text: '（不隶属任何势力）' }));
+    for (const n of tree.nodes) {
+      fSel.appendChild(el('option', { value: n.id, text: n.name + (n.role ? ' · ' + n.role : ''), selected: ch.faction && ch.faction.nodeId === n.id ? 'selected' : null }));
+    }
+    const fRole = el('input', { id: 'fRole', class: 'input', style: 'width:100%;margin-top:6px', value: (ch.faction && ch.faction.role) || '', placeholder: '在势力中的职位（如：外门弟子 / 三长老 / 左护法）' });
+    fb.appendChild(fSel);
+    fb.appendChild(fRole);
+    body.appendChild(fb);
+    // 已确认特征
+    const confBox = el('div', {});
+    confBox.appendChild(el('div', { class: 'muted', style: 'margin:4px 0', text: '已确认特征' }));
+    for (const f of (ch.facts || []).filter(x => x.confirmed)) {
+      confBox.appendChild(el('div', { style: 'display:flex;gap:8px;align-items:center;font-size:13px;padding:3px 0' },
+        el('span', { text: '· ' + f.text, style: 'flex:1' }),
+        el('button', { class: 'btn small danger', text: '删', onclick: async () => {
+          ch.facts = ch.facts.filter(x => x !== f);
+          await dbPut('characters', ch);
+          this.openDetail(id);
+        } })
+      ));
+    }
+    body.appendChild(confBox);
+    // 待确认特征
+    const pend = (ch.facts || []).filter(x => !x.confirmed);
+    if (pend.length) {
+      const pb = el('div', {});
+      pb.appendChild(el('div', { class: 'muted', style: 'margin:4px 0', text: '🤖 AI 识别 · 待你确认（确认后才写入人物卡）' }));
+      for (const f of pend) {
+        pb.appendChild(el('div', { class: 'pending-fact' },
+          el('div', { style: 'flex:1' },
+            el('div', { text: f.text }),
+            el('div', { class: 'src', text: '出处：' + (f.source || '') })
+          ),
+          el('button', { class: 'btn small primary', text: '采纳', onclick: async () => {
+            f.confirmed = true; f.at = Date.now();
+            await dbPut('characters', ch);
+            await logAdd('人物', '采纳特征：「' + ch.name + '」' + f.text);
+            this.openDetail(id);
+          } }),
+          el('button', { class: 'btn small danger', text: '忽略', onclick: async () => {
+            ch.facts = ch.facts.filter(x => x !== f);
+            await dbPut('characters', ch);
+            this.openDetail(id);
+          } })
+        ));
+      }
+      body.appendChild(pb);
+    }
+    // 关系
+    const rb = el('div', {});
+    rb.appendChild(el('div', { class: 'muted', style: 'margin:4px 0', text: '人物关系' + (relNames ? '：' + relNames : '') }));
+    const addRel = el('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' });
+    const allChars = (await dbAll('characters')).filter(x => x.id !== id);
+    const sel = el('select', { class: 'input', style: 'flex:1;min-width:110px' });
+    for (const x of allChars) sel.appendChild(el('option', { value: x.id, text: x.name }));
+    const typ = el('select', { class: 'input', style: 'min-width:90px' });
+    for (const t of ['师徒', '恋人', '仇敌', '同盟', '家族', '主仆', '朋友', '其他']) typ.appendChild(el('option', { value: t, text: t }));
+    addRel.appendChild(sel); addRel.appendChild(typ);
+    addRel.appendChild(el('button', { class: 'btn small primary', text: '＋添加', onclick: async () => {
+      if (!sel.value) { toast('先创建对方人物', 'err'); return; }
+      const target = allChars.find(x => x.id === sel.value);
+      ch.relations = ch.relations || [];
+      if (!ch.relations.some(r => r.targetId === target.id)) {
+        ch.relations.push({ targetId: target.id, targetName: target.name, type: typ.value });
+        target.relations = target.relations || [];
+        if (!target.relations.some(r => r.targetId === ch.id)) {
+          target.relations.push({ targetId: ch.id, targetName: ch.name, type: typ.value });
+        }
+        await dbPut('characters', ch);
+        await dbPut('characters', target);
+        await logAdd('人物', '添加关系：' + ch.name + '↔' + target.name + '(' + typ.value + ')');
+      }
+      this.openDetail(id);
+    } }));
+    rb.appendChild(addRel);
+    for (const r of (ch.relations || [])) {
+      rb.appendChild(el('div', { style: 'display:flex;gap:8px;align-items:center;font-size:13px;padding:3px 0' },
+        el('span', { text: `· ${r.targetName}（${r.type}）`, style: 'flex:1' }),
+        el('button', { class: 'btn small danger', text: '删', onclick: async () => {
+          ch.relations = ch.relations.filter(x => x !== r);
+          const t = await dbGet('characters', r.targetId);
+          if (t) { t.relations = (t.relations || []).filter(x => x.targetId !== ch.id); await dbPut('characters', t); }
+          await dbPut('characters', ch);
+          this.openDetail(id);
+        } })
+      ));
+    }
+    body.appendChild(rb);
+    // 其他操作
+    const acts = el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' });
+    acts.appendChild(el('button', { class: 'btn small', text: '🤖 AI 补充人物卡', onclick: async () => {
+      try {
+        const ctx = await AI.projectContext();
+        const sys = '你是小说人物设定助手。基于已知信息，为人物「' + ch.name + '」补充合理的设定（性格、背景、口头禅、金手指/能力、弱点），要贴合故事世界观，不要与已确认特征矛盾。\n' + ctx.text;
+        const data = await AI.json([{ role: 'system', content: sys }, { role: 'user', content: '输出：{"bio":"一段100字左右的简介","personality":"性格描述（20字内）","speechStyle":"说话风格描述（20字内）","skills":[{"name":"功法或技能名","desc":"一句话描述"}],"facts":["特征1","特征2","特征3"]}' }]);
+        if (data.bio) { ch.bio = data.bio; }
+        if (data.personality) { ch.personality = data.personality; }
+        if (data.speechStyle) { ch.speechStyle = data.speechStyle; }
+        if (Array.isArray(data.skills)) {
+          ch.skills = ch.skills || [];
+          for (const s of data.skills) {
+            if (s && s.name && !ch.skills.some(x => x.name === s.name)) ch.skills.push({ name: s.name, desc: s.desc || '' });
+          }
+        }
+        for (const f of (data.facts || [])) {
+          if (!ch.facts.some(x => x.text === f)) ch.facts.push({ text: f, source: 'AI 补充', confirmed: false, at: Date.now() });
+        }
+        await dbPut('characters', ch);
+        await logAdd('人物', 'AI 补充人物卡「' + ch.name + '」');
+        this.openDetail(id);
+      } catch (e) { toast(e.message, 'err'); }
+    } }));
+    acts.appendChild(el('button', { class: 'btn small danger', text: '🗑 删除人物', onclick: async () => {
+      if (!(await confirmDlg('删除人物「' + ch.name + '」？其关系也会解除。'))) return;
+      await dbDel('characters', id);
+      for (const x of await dbAll('characters')) {
+        const before = (x.relations || []).length;
+        x.relations = (x.relations || []).filter(r => r.targetId !== id);
+        if ((x.relations || []).length !== before) await dbPut('characters', x);
+      }
+      await logAdd('人物', '删除人物「' + ch.name + '」');
+      this.render();
+    } }));
+    body.appendChild(acts);
+    // 保存
+    const ok = await modal({ title: '人物卡 · ' + ch.name, body, okText: '💾 保存修改', cancelText: '取消' });
+    if (ok) {
+      ch.name = $('#d-name', body).value.trim() || ch.name;
+      ch.emoji = $('#d-emoji', body).value.trim() || '👤';
+      ch.bio = $('#d-bio', body).value.trim();
+      ch.personality = $('#d-personality', body).value.trim();
+      ch.speechStyle = $('#d-speech', body).value.trim();
+      ch.faction = $('#fSel', body) && $('#fSel', body).value ? { nodeId: $('#fSel', body).value, role: $('#fRole', body).value.trim() } : null;
+      ch.updatedAt = Date.now();
+      await dbPut('characters', ch);
+      await logAdd('人物', '修改人物卡「' + ch.name + '」');
+      toast('已保存', 'ok');
+      this.render();
+    }
+  },
+
+  /* 关系图（力导向 SVG） */
+  async renderGraph(chars, body) {
+    const svg = el('svg', { class: 'rel-graph', viewBox: '0 0 800 520' });
+    body.innerHTML = '';
+    body.appendChild(el('div', { class: 'muted', style: 'margin-bottom:8px', text: '拖动节点可调整位置 · 点击节点打开人物卡 · 连线颜色：红=仇敌 粉=恋人 绿=同盟/家族 蓝=师徒/主仆 灰=其他' }));
+    body.appendChild(svg);
+    const W = 800, H = 520;
+    const nodes = chars.map(ch => ({ id: ch.id, name: ch.name, x: W / 2 + (Math.random() - 0.5) * 300, y: H / 2 + (Math.random() - 0.5) * 220, vx: 0, vy: 0 }));
+    const byId = new Map(nodes.map(n => [n.id, n]));
+    const edges = [];
+    for (const ch of chars) for (const r of (ch.relations || [])) {
+      if (byId.has(r.targetId) && !edges.some(e => (e.a === ch.id && e.b === r.targetId) || (e.a === r.targetId && e.b === ch.id))) {
+        edges.push({ a: ch.id, b: r.targetId, type: r.type });
+      }
+    }
+    const colorOf = t => ({ '仇敌': '#c95b5b', '恋人': '#e07a9a', '同盟': '#5aa469', '家族': '#5aa469', '师徒': '#4a8fc9', '主仆': '#4a8fc9' }[t] || '#999');
+    let drag = null;
+    const g = el('g', {});
+    svg.appendChild(g);
+    const lineEls = new Map(), textEls = new Map();
+    function layout() {
+      g.innerHTML = '';
+      lineEls.clear(); textEls.clear();
+      for (const e of edges) {
+        const a = byId.get(e.a), b = byId.get(e.b);
+        const l = el('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: colorOf(e.type), 'stroke-width': 2.5, opacity: 0.75 });
+        g.appendChild(l); lineEls.set(e.a + '-' + e.b, l);
+      }
+      for (const n of nodes) {
+        const grp = el('g', { transform: `translate(${n.x},${n.y})`, style: 'cursor:pointer' });
+        grp.appendChild(el('circle', { r: 26, fill: '#fffaf0', stroke: '#c98b4b', 'stroke-width': 2 }));
+        grp.appendChild(el('text', { x: 0, y: 42, 'text-anchor': 'middle', 'font-size': 13, fill: '#3a2e28', text: n.name }));
+        grp.onclick = () => this.openDetail(n.id);
+        grp.addEventListener('pointerdown', (ev) => { ev.stopPropagation(); drag = n; grp.setPointerCapture(ev.pointerId); });
+        g.appendChild(grp);
+        textEls.set(n.id, grp);
+      }
+    }
+    svg.addEventListener('pointermove', (ev) => {
+      if (!drag) return;
+      const rect = svg.getBoundingClientRect();
+      drag.x = (ev.clientX - rect.left) * (W / rect.width);
+      drag.y = (ev.clientY - rect.top) * (H / rect.height);
+      update();
+    });
+    svg.addEventListener('pointerup', () => drag = null);
+    function update() {
+      for (const e of edges) { const a = byId.get(e.a), b = byId.get(e.b); const l = lineEls.get(e.a + '-' + e.b); if (l) { l.setAttribute('x1', a.x); l.setAttribute('y1', a.y); l.setAttribute('x2', b.x); l.setAttribute('y2', b.y); } }
+      for (const n of nodes) { const t = textEls.get(n.id); if (t) t.setAttribute('transform', `translate(${n.x},${n.y})`); }
+    }
+    function step() {
+      for (const a of nodes) for (const b of nodes) {
+        if (a === b) continue;
+        const dx = a.x - b.x, dy = a.y - b.y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 1) d2 = 1;
+        const f = 900 / d2;
+        a.vx += dx / Math.sqrt(d2) * f; a.vy += dy / Math.sqrt(d2) * f;
+      }
+      for (const e of edges) {
+        const a = byId.get(e.a), b = byId.get(e.b);
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const f = (d - 130) * 0.02;
+        a.vx += dx / d * f; a.vy += dy / d * f;
+        b.vx -= dx / d * f; b.vy -= dy / d * f;
+      }
+      for (const n of nodes) {
+        n.vx *= 0.85; n.vy *= 0.85;
+        n.x += n.vx; n.y += n.vy;
+        n.x = Math.max(35, Math.min(W - 35, n.x));
+        n.y = Math.max(35, Math.min(H - 35, n.y));
+      }
+      update();
+    }
+    layout();
+    const timer = setInterval(step, 33);
+    setTimeout(() => clearInterval(timer), 4000); // 物理模拟 4 秒后停止，之后纯手动拖动
+  }
+};
+
+PageMods.characters = Characters;
+
+;
+;/* ==== world.js ==== */
+'use strict';
+/* ===== 世界观页：分类设定库 ===== */
+
+const World = {
+  mounted: false,
+  cats: ['全部', '境界体系', '功法', '势力', '金手指', '时间线', '地理', '其他'],
+  curCat: '全部',
+
+  async mount(c) {
+    this.c = c;
+    c.innerHTML = `
+      <div class="page-inner">
+        <div class="page-title">
+          🌍 世界观设定库
+          <div class="spacer"></div>
+          <button id="world-add" class="btn primary small">＋ 新增设定</button>
+          <button id="world-ai" class="btn small">🤖 AI 协助</button>
+        </div>
+        <div class="cat-tabs" id="world-cats"></div>
+        <div id="world-list"></div>
+      </div>`;
+    $('#world-add', c).onclick = () => this.editItem(null);
+    $('#world-ai', c).onclick = () => this.aiAssist();
+    this.renderCats();
+    await this.render();
+  },
+  async focus() { await this.render(); },
+
+  renderCats() {
+    const box = $('#world-cats', this.c);
+    box.innerHTML = '';
+    for (const cat of this.cats) {
+      box.appendChild(el('button', { class: this.curCat === cat ? 'on' : '', text: cat, onclick: () => { this.curCat = cat; this.renderCats(); this.render(); } }));
+    }
+  },
+
+  async render() {
+    const rec = await dbGet('world', 'world') || { id: 'world', items: [] };
+    const box = $('#world-list', this.c);
+    box.innerHTML = '';
+    const items = rec.items.filter(it => this.curCat === '全部' || it.category === this.curCat);
+    if (!items.length) { box.innerHTML = '<div class="empty-tip">该分类还没有设定。点「＋ 新增设定」添加，或点「🤖 AI 协助」让 AI 帮你起草设定。</div>'; return; }
+    for (const it of items) {
+      box.appendChild(el('div', { class: 'card world-item' },
+        el('div', { class: 'title', html: `[${esc(it.category)}] ${esc(it.title || '未命名')}` }),
+        el('div', { class: 'content', text: it.content || '（空）' }),
+        el('div', { style: 'display:flex;gap:8px;margin-top:8px' },
+          el('button', { class: 'btn small', text: '✏️ 编辑', onclick: () => this.editItem(it) }),
+          el('button', { class: 'btn small danger', text: '🗑', onclick: async () => {
+            if (!(await confirmDlg('删除设定「' + it.title + '」？'))) return;
+            rec.items = rec.items.filter(x => x !== it);
+            await dbPut('world', rec);
+            await logAdd('世界观', '删除设定「' + it.title + '」');
+            this.render();
+          } })
+        )
+      ));
+    }
+  },
+
+  async editItem(item) {
+    const isNew = !item;
+    const catSel = el('select', { class: 'input', style: 'width:100%' });
+    for (const cat of this.cats.slice(1)) catSel.appendChild(el('option', { value: cat, text: cat, selected: item && item.category === cat ? 'selected' : null }));
+    const titleInp = el('input', { class: 'input', style: 'width:100%', value: item ? item.title : '', placeholder: '设定标题，如：练气九层' });
+    const contInp = el('textarea', { class: 'input', style: 'width:100%;min-height:130px', html: item ? esc(item.content) : '', placeholder: '详细内容…' });
+    const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
+      el('div', {}, el('div', { class: 'muted', text: '分类' }), catSel),
+      el('div', {}, el('div', { class: 'muted', text: '标题' }), titleInp),
+      el('div', {}, el('div', { class: 'muted', text: '内容' }), contInp)
+    );
+    const ok = await modal({ title: isNew ? '新增设定' : '编辑设定', body, okText: '💾 保存', cancelText: '取消' });
+    if (!ok) return;
+    const rec = await dbGet('world', 'world') || { id: 'world', items: [] };
+    if (isNew) {
+      rec.items.push({ id: uid(), category: catSel.value, title: titleInp.value.trim() || '未命名', content: contInp.value.trim(), updatedAt: Date.now() });
+      await logAdd('世界观', '新增设定「' + titleInp.value + '」');
+    } else {
+      item.category = catSel.value; item.title = titleInp.value.trim() || '未命名'; item.content = contInp.value.trim(); item.updatedAt = Date.now();
+      await logAdd('世界观', '修改设定「' + item.title + '」');
+    }
+    await dbPut('world', rec);
+    toast('已保存', 'ok');
+    this.render();
+  },
+
+  async aiAssist() {
+    const topic = await promptDlg('AI 协助起草', '', '想完善哪方面设定？如：灵气复苏后的世界格局 / 修仙家族传承 / 金手指规则');
+    if (!topic) return;
+    try {
+      toast('AI 起草中…', 'info');
+      const ctx = await AI.projectContext();
+      const data = await AI.json([
+        { role: 'system', content: '你是小说世界观设定专家。根据用户主题起草设定，要与已有设定兼容。\n' + ctx.text },
+        { role: 'user', content: '主题：' + topic + '\n输出：{"items":[{"category":"分类","title":"标题","content":"详细内容"}]}，1~3 条。' }
+      ]);
+      const rec = await dbGet('world', 'world') || { id: 'world', items: [] };
+      let n = 0;
+      for (const it of (data.items || [])) {
+        if (!it.title) continue;
+        rec.items.push({ id: uid(), category: it.category || '其他', title: it.title, content: it.content || '', updatedAt: Date.now(), aiDraft: true });
+        n++;
+      }
+      await dbPut('world', rec);
+      await logAdd('世界观', 'AI 起草设定「' + topic + '」' + n + ' 条（可编辑修改）');
+      toast('AI 起草了 ' + n + ' 条设定，请检查修改', 'ok');
+      this.render();
+    } catch (e) { toast(e.message, 'err'); }
+  }
+};
+
+PageMods.world = World;
+
+;
+;/* ==== sect.js ==== */
+'use strict';
+/* ===== 宗门布局页：树状组织图（宗主→长老→弟子） ===== */
+
+const Sect = {
+  mounted: false,
+
+  async mount(c) {
+    this.c = c;
+    c.innerHTML = `
+      <div class="page-inner">
+        <div class="page-title">
+          🚩 势力布局
+          <div class="spacer"></div>
+          <button id="sect-add-root" class="btn primary small">＋ 添加顶层（掌门/首领/族长）</button>
+        </div>
+        <div class="sect-wrap" id="sect-wrap"></div>
+        <div class="muted" style="margin-top:10px">适用任何世界观：宗门、家族、帮派、教会、军团、商盟……点击节点下方按钮：加下级 / 编辑 / 删除。点击「关联人物」可跳转人物页。</div>
+      </div>`;
+    $('#sect-add-root', c).onclick = () => this.editNode(null);
+    await this.render();
+  },
+  async focus() { await this.render(); },
+
+  async getTree() { return (await dbGet('sect', 'tree')) || { id: 'tree', nodes: [] }; },
+
+  async render() {
+    const wrap = $('#sect-wrap', this.c);
+    const tree = await this.getTree();
+    if (!tree.nodes.length) {
+      wrap.innerHTML = '<div class="empty-tip">还没有组织结构。点「＋ 添加顶层」添加宗主/族长，然后在节点上添加下级。</div>';
+      return;
+    }
+    const chars = await dbAll('characters');
+    const charName = (id) => { const x = chars.find(c => c.id === id); return x ? x.name : null; };
+    // 计算层级
+    const childrenOf = {};
+    for (const n of tree.nodes) {
+      (childrenOf[n.parentId || 'root'] = childrenOf[n.parentId || 'root'] || []).push(n);
+    }
+    const levels = {};
+    const walk = (id, depth) => {
+      levels[id] = depth;
+      for (const n of (childrenOf[id] || [])) walk(n.id, depth + 1);
+    };
+    walk('root', 0);
+    const maxDepth = Math.max(0, ...Object.values(levels));
+    const W = Math.max(720, (maxDepth + 1) * 190 + 60);
+    const H = 90 + Object.keys(levels).length * 110;
+    const svg = el('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` });
+    const pos = {};
+    const counts = {};
+    for (const n of tree.nodes) {
+      const d = levels[n.id];
+      counts[d] = (counts[d] || 0) + 1;
+      pos[n.id] = { x: 70 + d * 190, y: 70 + (counts[d] - 1) * 110 };
+    }
+    // 连线
+    for (const n of tree.nodes) {
+      const p = n.parentId ? pos[n.parentId] : null;
+      const q = pos[n.id];
+      if (p) {
+        svg.appendChild(el('line', { x1: p.x, y1: p.y + 22, x2: q.x, y2: q.y - 22, stroke: '#c98b4b', 'stroke-width': 2, opacity: 0.6 }));
+      }
+    }
+    // 节点
+    const depthColors = ['#f3d9a8', '#f6e6c8', '#fbeed8', '#fdf6e8']; // 层级越高颜色越浅（等级从高到低）
+    for (const n of tree.nodes) {
+      const q = pos[n.id];
+      const grp = el('g', { transform: `translate(${q.x - 92},${q.y - 29})` });
+      const w = 184;
+      const name = n.name || '未命名';
+      const linkedChar = charName(n.characterId);
+      const sub = [n.role ? '🎖 ' + n.role : '', linkedChar ? '人物：' + linkedChar : ''].filter(Boolean).join('  ');
+      const d = levels[n.id] || 0;
+      grp.appendChild(el('rect', { width: w, height: 58, rx: 12, fill: depthColors[Math.min(d, depthColors.length - 1)], stroke: d === 0 ? '#c98b4b' : '#d9c39a', 'stroke-width': d === 0 ? 2 : 1.2 }));
+      grp.appendChild(el('text', { x: w / 2, y: 26, 'text-anchor': 'middle', 'font-size': 14.5, 'font-weight': 'bold', fill: '#4a3520', text: name.slice(0, 14) }));
+      grp.appendChild(el('text', { x: w / 2, y: 46, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#8a6e4a', text: sub.slice(0, 22) || '（无职位）' }));
+      // 操作按钮
+      const acts = el('g', { transform: `translate(${q.x} - 66,${q.y + 32})` });
+      const mkBtn = (x, label, fn) => {
+        const b = el('g', { transform: `translate(${x},0)`, style: 'cursor:pointer' });
+        b.appendChild(el('rect', { width: 40, height: 20, rx: 7, fill: '#fffdf7', stroke: '#e5d9c3' }));
+        b.appendChild(el('text', { x: 20, y: 14, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#8a7a6a', text: label }));
+        b.onclick = (ev) => { ev.stopPropagation(); fn(); };
+        acts.appendChild(b);
+      };
+      mkBtn(0, '＋下级', () => this.editNode({ parentId: n.id }));
+      mkBtn(46, '✏️', () => this.editNode(n));
+      mkBtn(86, '🗑', () => this.deleteNode(n.id));
+      svg.appendChild(grp);
+      svg.appendChild(acts);
+    }
+    wrap.innerHTML = '';
+    wrap.appendChild(svg);
+    // 图例
+    wrap.appendChild(el('div', { style: 'padding:10px 12px;font-size:12px;color:#8a7a6a;display:flex;gap:16px;flex-wrap:wrap' },
+      el('span', { html: '<b style="color:#c98b4b">■</b> 顶层首领（宗主/族长/教主）' }),
+      el('span', { html: '<b style="color:#d9a86a">■</b> 高层（长老/堂主）' }),
+      el('span', { html: '<b style="color:#e8cf9e">■</b> 中层' }),
+      el('span', { html: '<b style="color:#f4e6c8">■</b> 基层成员' })
+    ));
+  },
+
+  async editNode(node) {
+    const isNew = !node;
+    const nameInp = el('input', { class: 'input', style: 'width:100%', value: node ? node.name : '', placeholder: '名称/职位，如：青云老祖 / 大长老' });
+    const roleInp = el('input', { class: 'input', style: 'width:100%', value: node && node.role ? node.role : '', placeholder: '职位说明（可选）：如：掌门 · 教主 · 族长 · 帮主' });
+    const chars = await dbAll('characters');
+    const sel = el('select', { class: 'input', style: 'width:100%' });
+    sel.appendChild(el('option', { value: '', text: '（不关联人物）' }));
+    for (const x of chars) sel.appendChild(el('option', { value: x.id, text: x.name, selected: node && node.characterId === x.id ? 'selected' : null }));
+    const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
+      el('div', {}, el('div', { class: 'muted', text: '名称' }), nameInp),
+      el('div', {}, el('div', { class: 'muted', text: '职位' }), roleInp),
+      el('div', {}, el('div', { class: 'muted', text: '关联人物（人物页里创建后可选）' }), sel)
+    );
+    const ok = await modal({ title: isNew ? '添加组织节点' : '编辑节点', body, okText: '💾 保存', cancelText: '取消' });
+    if (!ok) return;
+    const tree = await this.getTree();
+    if (isNew) {
+      const n = { id: uid(), parentId: node ? (node.parentId || null) : null, name: nameInp.value.trim() || '未命名', role: roleInp.value.trim(), characterId: sel.value || null };
+      tree.nodes.push(n);
+      await logAdd('宗门', '添加节点「' + n.name + '」');
+    } else {
+      node.name = nameInp.value.trim() || '未命名';
+      node.role = roleInp.value.trim();
+      node.characterId = sel.value || null;
+      await logAdd('宗门', '修改节点「' + node.name + '」');
+    }
+    await dbPut('sect', tree);
+    toast('已保存', 'ok');
+    this.render();
+  },
+
+  async deleteNode(id) {
+    const tree = await this.getTree();
+    const node = tree.nodes.find(n => n.id === id);
+    if (!node) return;
+    const children = tree.nodes.filter(n => n.parentId === id);
+    if (!(await confirmDlg('删除节点「' + node.name + '」' + (children.length ? '及其下所有节点' : '') + '？'))) return;
+    const drop = new Set([id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const n of tree.nodes) if (!drop.has(n.id) && n.parentId && drop.has(n.parentId)) { drop.add(n.id); changed = true; }
+    }
+    tree.nodes = tree.nodes.filter(n => !drop.has(n.id));
+    await dbPut('sect', tree);
+    await logAdd('宗门', '删除节点「' + node.name + '」');
+    this.render();
+  }
+};
+
+PageMods.sect = Sect;
+
+;
+;/* ==== map.js ==== */
+'use strict';
+/* ===== 地图页：程序化地形生成 + 地点标记 + 版本时间线 + 改名历史 ===== */
+
+/* ---- 噪声（Perlin） ---- */
+const Noise = (() => {
+  const perm = new Uint8Array(512);
+  const p = new Uint8Array(256);
+  let seeded = false;
+  function seed(s) {
+    for (let i = 0; i < 256; i++) p[i] = i;
+    let x = s >>> 0;
+    for (let i = 255; i > 0; i--) {
+      x = (x * 1103515245 + 12345) >>> 0;
+      const j = x % (i + 1);
+      const t = p[i]; p[i] = p[j]; p[j] = t;
+    }
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+    seeded = true;
+  }
+  function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+  function lerp(a, b, t) { return a + t * (b - a); }
+  function grad(h, x, y) {
+    const g = h & 7;
+    const u = g < 4 ? x : y, v = g < 4 ? y : x;
+    return ((g & 1) ? -u : u) + ((g & 2) ? -v : v);
+  }
+  function noise2(x, y) {
+    if (!seeded) seed(1337);
+    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+    x -= Math.floor(x); y -= Math.floor(y);
+    const u = fade(x), v = fade(y);
+    const a = perm[X] + Y, b = perm[X + 1] + Y;
+    return lerp(
+      lerp(grad(perm[a], x, y), grad(perm[b], x - 1, y), u),
+      lerp(grad(perm[a + 1], x, y - 1), grad(perm[b + 1], x - 1, y - 1), u),
+      v) * 0.707 + 0.5;
+  }
+  function fbm(x, y, oct = 4) {
+    let v = 0, amp = 0.5, f = 1, tot = 0;
+    for (let i = 0; i < oct; i++) { v += noise2(x * f, y * f) * amp; tot += amp; amp *= 0.5; f *= 2; }
+    return v / tot;
+  }
+  return { seed, noise2, fbm };
+})();
+
+/* ---- 图片压缩：把导入的草图压到最长边 1024 的 JPEG，适合存储与多模态分析 ---- */
+function compressImage(file) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 1024;
+        let w = img.width, h = img.height;
+        if (w > max || h > max) { const k = Math.min(max / w, max / h); w = Math.round(w * k); h = Math.round(h * k); }
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        res(cv.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => rej(new Error('图片无法解析'));
+      img.src = fr.result;
+    };
+    fr.onerror = () => rej(new Error('文件读取失败'));
+    fr.readAsDataURL(file);
+  });
+}
+
+/* ---- 地图数据与逻辑 ---- */
+const MapPage = {
+  mounted: false,
+  W: 160, H: 284, // 地形分辨率
+  view: { scale: 1, ox: 0, oy: 0 }, // 相机
+  drag: null,
+  placing: null, // 待放置的地点类型
+  regionMode: false, regionPts: [],
+  curType: '全部',
+  sketchMode: false, // 草图模式
+  sketch: [], // [{points:[{x,y}], color}]
+  sketchColor: '#ffd27d',
+  draggingSketch: null,
+  mapBusy: false,
+  sketchImage: null, // {dataUrl, name} 导入的参考草图
+  showSketchImage: true,
+  _sketchImgEl: null,
+
+  async mount(c) {
+    this.c = c;
+    c.innerHTML = `
+      <div class="map-page">
+        <div class="map-main">
+          <div class="map-toolbar">
+            <span style="font-weight:700">🗺️ 世界地图</span>
+            <button id="m-gen" class="btn small primary">🌍 生成/重置地形</button>
+            <button id="m-aiimg" class="btn small">🎨 AI 生成底图</button>
+            <button id="m-expand" class="btn small">➕ 扩充大陆</button>
+            <button id="m-marker" class="btn small">📍 添加地点</button>
+            <button id="m-region" class="btn small">🖍️ 势力区域</button>
+            <button id="m-done-region" class="btn small danger" hidden>✅ 完成区域</button>
+            <button id="m-sketch" class="btn small">✏️ 画草图</button>
+            <button id="m-sketch-undo" class="btn small">↩ 撤销一笔</button>
+            <button id="m-sketch-clear" class="btn small danger">🧹 清空草图</button>
+            <button id="m-img" class="btn small">🖼️ 导入草图</button>
+            <button id="m-img-toggle" class="btn small">👁️ 底图</button>
+            <button id="m-img-ai" class="btn small">🤖 分析草图</button>
+            <select id="m-filter" class="input" style="width:auto;padding:6px 10px">
+              <option value="全部">全部地点</option>
+              <option value="宗门">🏯 宗门</option>
+              <option value="城市">🏙️ 城市</option>
+              <option value="秘境">✨ 秘境</option>
+              <option value="战场">⚔️ 战场</option>
+              <option value="其他">📌 其他</option>
+            </select>
+            <div class="spacer"></div>
+            <span class="count" id="m-ver-label"></span>
+            <button id="m-newver" class="btn small">📸 新建版本</button>
+            <button id="m-ai-toggle" class="btn small">🤖 地图AI</button>
+          </div>
+          <div class="map-stage" id="m-stage">
+            <canvas id="m-canvas"></canvas>
+            <div class="map-pop" id="m-pop" hidden></div>
+            <div class="map-versions" id="m-versions" hidden>
+              <h5>📜 版本时间线</h5>
+              <div id="m-ver-list"></div>
+            </div>
+          </div>
+        </div>
+        <aside class="map-ai" id="map-ai">
+          <div class="map-ai-h">
+            🤖 地图 AI
+            <span class="ctx" title="地图 AI 与写作页 AI 对话相互独立">独立对话 · 已加载地形/草图/地点</span>
+            <div class="spacer"></div>
+            <button id="m-ai-close" class="btn small">✕</button>
+          </div>
+          <div class="chat-quick">
+            <button id="mq-gen" class="btn small primary">🌍 按草图生成地形</button>
+            <button id="mq-clear" class="btn small">🗑清空对话</button>
+          </div>
+          <div id="map-chat-box" class="chat-box"></div>
+          <div class="chat-in">
+            <textarea id="map-chat-input" rows="2" placeholder="和 AI 聊地图：描述你的世界构想、让它规划大陆与地点，或先画草图再让它按草图生成地形…"></textarea>
+            <button id="map-chat-send" class="btn primary">发送</button>
+          </div>
+        </aside>
+      </div>`;
+    this.canvas = $('#m-canvas', c);
+    this.ctx = this.canvas.getContext('2d');
+    this.stage = $('#m-stage', c);
+    this.pop = $('#m-pop', c);
+    this.bind();
+    // 初始化地图
+    let maps = await dbAll('maps');
+    if (!maps.length) {
+      const m = this.newMap();
+      await dbPut('maps', m);
+      maps = [m];
+    }
+    this.map = maps[0];
+    this.sketch = this.map.sketch || [];
+    this.sketchImage = this.map.sketchImage || null;
+    this._sketchImgEl = null;
+    this.render();
+    await this.renderMapChat();
+  },
+  async focus() {
+    const maps = await dbAll('maps');
+    if (maps.length && (!this.map || !maps.find(m => m.id === this.map.id))) {
+      this.map = maps[0];
+      this.sketch = this.map.sketch || [];
+      this.sketchImage = this.map.sketchImage || null;
+      this._sketchImgEl = null;
+    }
+    this.render();
+  },
+
+  newMap() {
+    const t = { seed: (Math.random() * 1e9) | 0, continents: 3, mountains: 0.5, rivers: 6, forests: 0.4 };
+    const v = { id: uid(), label: 'v1 · 创世', event: '世界初生', time: Date.now(), markers: [], regions: [], terrain: t };
+    return { id: uid(), name: '主世界', versions: [v], current: 0 };
+  },
+
+  getCur() { return this.map ? this.map.versions[this.map.current] : null; },
+
+  bind() {
+    const c = this.c;
+    $('#m-gen', c).onclick = async () => {
+      const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' });
+      const mk = (label, id, min, max, val, step = 1) => {
+        const row = el('div', {});
+        row.appendChild(el('div', { class: 'muted', text: label + '：<span id="' + id + '-v">' + val + '</span>' }));
+        const inp = el('input', { type: 'range', min, max, step, value: val, style: 'width:100%' });
+        inp.oninput = () => $('#' + id + '-v', body).textContent = inp.value;
+        row.appendChild(inp);
+        return { row, inp };
+      };
+      const cur = this.getCur().terrain;
+      const a1 = mk('大陆数量', 'g-cont', 1, 6, cur.continents);
+      const a2 = mk('山脉密度', 'g-mount', 0.1, 1, cur.mountains, 0.05);
+      const a3 = mk('河流条数', 'g-river', 0, 15, cur.rivers);
+      const a4 = mk('森林密度', 'g-forest', 0, 0.8, cur.forests, 0.05);
+      const seedInp = el('input', { class: 'input', style: 'width:100%', value: cur.seed });
+      body.appendChild(el('div', {}, el('div', { class: 'muted', text: '随机种子（换一个数字 = 换一个世界）' }), seedInp));
+      for (const a of [a1, a2, a3, a4]) body.appendChild(a.row);
+      const ok = await modal({ title: '🌍 生成世界地形', body, okText: '🌍 生成', cancelText: '取消' });
+      if (!ok) return;
+      const v = this.getCur();
+      v.terrainType = 'proc';
+      v.terrain = {
+        seed: parseInt(seedInp.value) || 1,
+        continents: +a1.inp.value, mountains: +a2.inp.value, rivers: +a3.inp.value, forests: +a4.inp.value
+      };
+      await this.saveMap();
+      this.draw();
+    };
+    $('#m-marker', c).onclick = () => {
+      this.regionMode = false;
+      this.placing = this.placing ? null : '宗门';
+      $('#m-region', c).classList.toggle('primary', false);
+      $('#m-marker', c).classList.toggle('primary', !!this.placing);
+      toast(this.placing ? '在地图上点一下放置地点（默认宗门，可在筛选框旁弹窗里改类型）' : '已取消放置', 'info');
+    };
+    $('#m-region', c).onclick = () => {
+      this.placing = null;
+      this.regionMode = !this.regionMode;
+      $('#m-region', c).classList.toggle('primary', this.regionMode);
+      $('#m-done-region', c).hidden = !this.regionMode;
+      if (this.regionMode) { this.regionPts = []; toast('点击地图添加区域顶点（至少3个），点「完成区域」结束', 'info'); }
+    };
+    $('#m-done-region', c).onclick = async () => {
+      if (this.regionPts.length < 3) { toast('至少需要 3 个顶点', 'err'); return; }
+      const name = await promptDlg('区域名称', '', '如：青云宗领地');
+      if (!name) { return; }
+      const color = ['#c98b4b', '#5aa469', '#4a8fc9', '#c95b5b', '#8a5aa4', '#c98b8b'][Math.floor(Math.random() * 6)];
+      this.getCur().regions.push({ id: uid(), name, color, points: [...this.regionPts] });
+      this.regionMode = false; this.regionPts = [];
+      $('#m-region', c).classList.remove('primary');
+      $('#m-done-region', c).hidden = true;
+      await this.saveMap();
+      await logAdd('地图', '新增势力区域「' + name + '」');
+      this.draw();
+    };
+    $('#m-filter', c).onchange = (e) => { this.curType = e.target.value; this.draw(); };
+    // 草图
+    $('#m-sketch', c).onclick = () => {
+      this.placing = null; this.regionMode = false; this.regionPts = [];
+      $('#m-region', c).classList.remove('primary');
+      $('#m-marker', c).classList.remove('primary');
+      $('#m-done-region', c).hidden = true;
+      this.sketchMode = !this.sketchMode;
+      $('#m-sketch', c).classList.toggle('primary', this.sketchMode);
+      toast(this.sketchMode ? '✏️ 草图模式：在地图上拖动画笔（黄色线条），画完可让 AI 按草图生成地形' : '已退出草图模式', 'info');
+    };
+    $('#m-sketch-undo', c).onclick = () => {
+      if (!this.sketch.length) { toast('没有可撤销的笔画', 'err'); return; }
+      this.sketch.pop();
+      this.draw();
+      this.saveSketch();
+    };
+    $('#m-sketch-clear', c).onclick = async () => {
+      if (!this.sketch.length) { toast('草图本来就是空的', 'info'); return; }
+      if (!(await confirmDlg('清空全部草图笔画？'))) return;
+      this.sketch = [];
+      this.draw();
+      this.saveSketch();
+    };
+    // 地图 AI 面板
+    $('#m-ai-toggle', c).onclick = () => $('#map-ai').classList.toggle('open');
+    $('#m-ai-close', c).onclick = () => $('#map-ai').classList.remove('open');
+    const mSend = async () => {
+      const inp = $('#map-chat-input', c);
+      const text = inp.value.trim();
+      if (!text || this.mapBusy) return;
+      inp.value = '';
+      await this.mapChatAsk(text, { kind: 'chat' });
+    };
+    $('#map-chat-send', c).onclick = mSend;
+    $('#map-chat-input', c).addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); mSend(); } });
+    $('#mq-clear', c).onclick = async () => {
+      if (!(await confirmDlg('清空地图 AI 的对话？（不影响写作页的 AI 对话）'))) return;
+      await dbPut('chat', { id: 'mapchat', messages: [] });
+      this.renderMapChat();
+    };
+    $('#mq-gen', c).onclick = () => this.genFromSketch();
+    // AI 生成底图 / 扩充大陆
+    $('#m-aiimg', c).onclick = () => this.aiGenerateBaseImage();
+    $('#m-expand', c).onclick = () => this.expandMap();
+    // 导入草图图片（相册/画图导出/拍照）
+    $('#m-img', c).onclick = () => this.importSketchImage();
+    $('#m-img-toggle', c).onclick = () => {
+      this.showSketchImage = !this.showSketchImage;
+      $('#m-img-toggle', c).classList.toggle('primary', this.showSketchImage);
+      this.draw();
+    };
+    $('#m-img-ai', c).onclick = () => this.analyzeSketchImage();
+    $('#m-newver', c).onclick = async () => {
+      const cur = this.getCur();
+      const label = await promptDlg('新建地图版本', 'v' + (this.map.versions.length + 1) + ' · ' + new Date().toLocaleDateString('zh-CN'), '版本名，如：天崩之战后');
+      if (!label) return;
+      const event = await promptDlg('这一版本发生了什么大事？', '', '如：主角与魔王对轰，青云山脉被轰成平原（此事件会记入改名历史）');
+      const v = {
+        id: uid(), label: label || ('v' + (this.map.versions.length + 1)),
+        event: event || '', time: Date.now(),
+        markers: JSON.parse(JSON.stringify(cur.markers)),
+        regions: JSON.parse(JSON.stringify(cur.regions)),
+        terrain: { ...cur.terrain }
+      };
+      this.map.versions.push(v);
+      this.map.current = this.map.versions.length - 1;
+      await this.saveMap();
+      await logAdd('地图', '新建版本「' + v.label + '」' + (event ? '，事件：' + event : ''));
+      toast('已创建新版本，可在此基础上修改', 'ok');
+      this.render();
+    };
+    // 画布交互
+    const cv = this.canvas;
+    cv.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const f = e.deltaY < 0 ? 1.15 : 0.87;
+      this.view.scale = Math.max(0.4, Math.min(6, this.view.scale * f));
+      this.draw();
+    }, { passive: false });
+    let pinch = null;
+    cv.addEventListener('pointerdown', (e) => {
+      const pos = this.toNorm(e);
+      // 草图模式优先（指针捕获保证笔画连续，笔/手指/鼠标落点一致）
+      if (this.sketchMode) {
+        cv.setPointerCapture(e.pointerId);
+        this.draggingSketch = { points: [pos], color: this.sketchColor };
+        this.sketch.push(this.draggingSketch);
+        this.draw();
+        return;
+      }
+      // 地点拖动优先
+      const hit = this.hitMarker(pos);
+      if (hit) { cv.setPointerCapture(e.pointerId); this.drag = { type: 'marker', marker: hit }; return; }
+      if (this.placing) {
+        this.addMarkerAt(pos);
+        return;
+      }
+      if (this.regionMode) {
+        this.regionPts.push(pos);
+        this.draw();
+        return;
+      }
+      cv.setPointerCapture(e.pointerId);
+      this.drag = { type: 'pan', sx: e.clientX, sy: e.clientY, ox: this.view.ox, oy: this.view.oy };
+    });
+    cv.addEventListener('pointermove', (e) => {
+      if (this.draggingSketch) {
+        const pos = this.toNorm(e);
+        this.draggingSketch.points.push(pos);
+        this.draw();
+        return;
+      }
+      if (!this.drag) return;
+      if (this.drag.type === 'marker') {
+        const pos = this.toNorm(e);
+        this.drag.marker.x = Math.max(0.02, Math.min(0.98, pos.x));
+        this.drag.marker.y = Math.max(0.02, Math.min(0.98, pos.y));
+        this.draw();
+      } else {
+        this.view.ox = this.drag.ox + (e.clientX - this.drag.sx);
+        this.view.oy = this.drag.oy + (e.clientY - this.drag.sy);
+        this.draw();
+      }
+    });
+    const endDrag = () => {
+      if (this.draggingSketch) {
+        this.saveSketch();
+        this.draggingSketch = null;
+      }
+      this.drag = null;
+    };
+    cv.addEventListener('pointerup', endDrag);
+    cv.addEventListener('pointerleave', endDrag);
+    cv.addEventListener('pointercancel', endDrag);
+    // 触摸双指缩放（简版：两根手指距离变化）
+    cv.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        pinch = { d: Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY), s: this.view.scale };
+      }
+    }, { passive: true });
+    cv.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && pinch) {
+        e.preventDefault();
+        const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        this.view.scale = Math.max(0.4, Math.min(6, pinch.s * d / pinch.d));
+        this.draw();
+      }
+    }, { passive: false });
+    cv.addEventListener('touchend', () => { pinch = null; });
+    cv.addEventListener('click', (e) => {
+      const pos = this.toNorm(e);
+      const hit = this.hitMarker(pos);
+      if (hit) this.showPopup(hit, e);
+    });
+    // 自适应尺寸
+    new ResizeObserver(() => this.draw()).observe(this.stage);
+  },
+
+  toNorm(e) {
+    const r = this.canvas.getBoundingClientRect();
+    const x = (e.clientX - r.left - this.view.ox) / (r.width * this.view.scale);
+    const y = (e.clientY - r.top - this.view.oy) / (r.height * this.view.scale);
+    return { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
+  },
+
+  hitMarker(pos) {
+    const cur = this.getCur();
+    for (let i = cur.markers.length - 1; i >= 0; i--) {
+      const m = cur.markers[i];
+      if (Math.abs(m.x - pos.x) < 0.035 && Math.abs(m.y - pos.y) < 0.05) return m;
+    }
+    return null;
+  },
+
+  async addMarkerAt(pos) {
+    const types = { '宗门': '🏯', '城市': '🏙️', '秘境': '✨', '战场': '⚔️', '其他': '📌' };
+    const type = await promptDlg('地点类型（宗门/城市/秘境/战场/其他）', this.placing || '宗门');
+    if (!type) return;
+    const name = await promptDlg('地点名称', '', '如：青云宗');
+    if (!name) return;
+    const desc = await promptDlg('简介（可选）', '', '一句话描述');
+    this.getCur().markers.push({
+      id: uid(), name, type: type.trim() || '其他', desc: desc || '',
+      x: pos.x, y: pos.y, renames: []
+    });
+    this.placing = null;
+    $('#m-marker', this.c).classList.remove('primary');
+    await this.saveMap();
+    await logAdd('地图', '添加地点「' + name + '」（' + this.getCur().label + '）');
+    this.draw();
+  },
+
+  showPopup(m, e) {
+    const cur = this.getCur();
+    const types = { '宗门': '🏯', '城市': '🏙️', '秘境': '✨', '战场': '⚔️', '其他': '📌' };
+    const p = this.pop;
+    p.innerHTML = '';
+    p.hidden = false;
+    p.appendChild(el('div', { style: 'font-weight:700;font-size:15px', text: (types[m.type] || '📌') + ' ' + m.name }));
+    if (m.desc) p.appendChild(el('div', { style: 'font-size:13px;margin-top:4px;line-height:1.6', text: m.desc }));
+    const hist = el('div', { style: 'font-size:12px;color:#8a7a6a;margin-top:6px;line-height:1.7' });
+    hist.appendChild(el('div', { text: '📜 名称历史：' }));
+    const history = [{ name: m.name, at: '当前版本', reason: '' }, ...(m.renames || []).slice().reverse()];
+    for (const h of history) hist.appendChild(el('div', { text: `· ${h.name}（${h.at}${h.reason ? '：' + h.reason : ''}）` }));
+    p.appendChild(hist);
+    const acts = el('div', { style: 'display:flex;gap:6px;margin-top:8px;flex-wrap:wrap' });
+    acts.appendChild(el('button', { class: 'btn small primary', text: '✏️ 改名（记入历史）', onclick: async () => {
+      const newName = await promptDlg('新名称', m.name);
+      if (!newName || newName === m.name) return;
+      const reason = await promptDlg('为什么改名？', '', '如：天崩之战被轰平');
+      m.renames = m.renames || [];
+      m.renames.push({ oldName: m.name, newName, reason: reason || '', at: cur.label + ' · ' + new Date().toLocaleDateString('zh-CN') });
+      m.name = newName;
+      await this.saveMap();
+      await logAdd('地图', '地点改名：「' + m.renames[m.renames.length - 1].oldName + '」→「' + newName + '」' + (reason ? '，原因：' + reason : ''));
+      toast('已改名并记录历史', 'ok');
+      p.hidden = true;
+      this.draw();
+    } }));
+    acts.appendChild(el('button', { class: 'btn small danger', text: '🗑 删除', onclick: async () => {
+      if (!(await confirmDlg('删除地点「' + m.name + '」？'))) return;
+      cur.markers = cur.markers.filter(x => x !== m);
+      await this.saveMap();
+      p.hidden = true;
+      this.draw();
+    } }));
+    acts.appendChild(el('button', { class: 'btn small', text: '✕', onclick: () => p.hidden = true }));
+    p.appendChild(acts);
+    // 定位弹窗
+    const rect = this.canvas.getBoundingClientRect();
+    const px = rect.left + (m.x * rect.width * this.view.scale + this.view.ox);
+    const py = rect.top + (m.y * rect.height * this.view.scale + this.view.oy);
+    p.style.left = Math.min(rect.width - 300, Math.max(8, px - rect.left - 140)) + 'px';
+    p.style.top = Math.min(rect.height - 320, Math.max(8, py - rect.top - 60)) + 'px';
+  },
+
+  async saveMap() { this.map.sketch = this.sketch; this.map.sketchImage = this.sketchImage; await dbPut('maps', this.map); },
+  async saveSketch() { await this.saveMap(); },
+
+  async render() {
+    const ver = this.getCur();
+    $('#m-ver-label', this.c).textContent = '版本：' + ver.label + (ver.event ? '（' + ver.event + '）' : '');
+    // 版本面板
+    const vl = $('#m-ver-list', this.c);
+    vl.innerHTML = '';
+    this.map.versions.forEach((v, i) => {
+      const item = el('div', {
+        class: 'version-item' + (i === this.map.current ? ' on' : ''),
+        onclick: async () => {
+          if (i !== this.map.current && !(await confirmDlg('切换到版本「' + v.label + '」？（切换后只能查看，编辑会作用于当前版本）'))) return;
+          this.map.current = i;
+          await this.saveMap();
+          this.render();
+        }
+      },
+        el('div', { text: v.label }),
+        v.event ? el('div', { class: 'ev', text: v.event }) : null,
+        el('div', { style: 'display:flex;gap:4px;margin-top:4px' },
+          el('button', { class: 'btn small', title: '编辑版本名/事件', text: '✏️', onclick: (e) => { e.stopPropagation(); this.editVersion(i); } }),
+          el('button', { class: 'btn small danger', title: '删除该版本', text: '🗑', onclick: (e) => { e.stopPropagation(); this.deleteVersion(i); } })
+        )
+      );
+      vl.appendChild(item);
+    });
+    $('#m-versions', this.c).hidden = false;
+    this.draw();
+  },
+
+  /* ✏️ 编辑版本：改名 / 改事件描述 */
+  async editVersion(i) {
+    const v = this.map.versions[i];
+    if (!v) return;
+    const labelInp = el('input', { class: 'input', value: v.label, style: 'width:100%' });
+    const eventInp = el('input', { class: 'input', value: v.event || '', style: 'width:100%', placeholder: '这一版本发生了什么（可留空）' });
+    const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
+      el('div', {}, el('div', { class: 'muted', text: '版本名' }), labelInp),
+      el('div', {}, el('div', { class: 'muted', text: '事件描述' }), eventInp)
+    );
+    const ok = await modal({ title: '✏️ 编辑版本', body, okText: '💾 保存', cancelText: '取消' });
+    if (!ok) return;
+    v.label = labelInp.value.trim() || v.label;
+    v.event = eventInp.value.trim();
+    await this.saveMap();
+    await logAdd('地图', '编辑版本「' + v.label + '」' + (v.event ? '，事件：' + v.event : ''));
+    toast('版本已更新', 'ok');
+    this.render();
+  },
+
+  /* 🗑 删除版本：保留有用的历史 */
+  async deleteVersion(i) {
+    const v = this.map.versions[i];
+    if (!v) return;
+    if (this.map.versions.length <= 1) { toast('至少需要保留一个版本', 'err'); return; }
+    if (!(await confirmDlg('删除版本「' + v.label + '」？' + (v.event ? '\n事件：' + v.event + '\n' : '') + '此操作不可恢复！'))) return;
+    this.map.versions.splice(i, 1);
+    if (this.map.current >= this.map.versions.length) this.map.current = this.map.versions.length - 1;
+    else if (this.map.current > i) this.map.current--;
+    await this.saveMap();
+    await logAdd('地图', '删除版本「' + v.label + '」（剩余 ' + this.map.versions.length + ' 个版本）');
+    toast('版本已删除', 'ok');
+    this.render();
+  },
+
+  /* ---------- 地图 AI 对话（与写作页对话相互独立） ---------- */
+  async mapContext() {
+    const ver = this.getCur();
+    const t = ver ? (ver.terrain || {}) : {};
+    const markers = ver ? ver.markers.map(m => `${m.name}(${m.type},位于${(m.x * 100).toFixed(0)}%横向,${(m.y * 100).toFixed(0)}%纵向)`) : [];
+    const regions = ver ? ver.regions.map(r => r.name) : [];
+    return [
+      `当前版本：${ver ? ver.label : '无'}${ver && ver.event ? '（' + ver.event + '）' : ''}`,
+      `地形参数：种子=${t.seed ?? 1} 大陆=${t.continents ?? 3} 山脉=${t.mountains ?? 0.5} 河流=${t.rivers ?? 6} 森林=${t.forests ?? 0.4}`,
+      `已有地点：${markers.length ? markers.join('；') : '（无）'}`,
+      `已有势力区域：${regions.length ? regions.join('、') : '（无）'}`,
+      `草图统计：${this.sketchStats()}`
+    ].join('\n');
+  },
+
+  sketchStats() {
+    if (!this.sketch.length) return '还没有画草图';
+    let minX = 1, minY = 1, maxX = 0, maxY = 0, pts = 0;
+    for (const s of this.sketch) for (const p of s.points) {
+      minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+      pts++;
+    }
+    const w = maxX - minX, h = maxY - minY;
+    return `共${this.sketch.length}笔${pts}个点，覆盖区域：横向${(minX * 100).toFixed(0)}%~${(maxX * 100).toFixed(0)}%，纵向${(minY * 100).toFixed(0)}%~${(maxY * 100).toFixed(0)}%（${(w * 100).toFixed(0)}%宽×${(h * 100).toFixed(0)}%高），草图整体${w > h ? '偏横向' : w < h ? '偏纵向' : '接近方形'}，位置${minX < 0.3 ? '偏左' : minX > 0.6 ? '偏右' : '居中'}、${minY < 0.3 ? '偏上' : minY > 0.6 ? '偏下' : '居中'}`;
+  },
+
+  async mapChatAsk(text, meta = { kind: 'chat' }) {
+    if (this.mapBusy) return;
+    const chat = await dbGet('chat', 'mapchat') || { id: 'mapchat', messages: [] };
+    chat.messages.push({ role: 'user', content: text, ts: Date.now() });
+    await dbPut('chat', chat);
+    this.renderMapChat();
+    const ctx = await this.mapContext();
+    const sys = '你是小说世界地图规划师，熟悉奇幻/修仙/科幻等各类世界观的地理设计。' +
+      '根据用户描述与当前地图状态给出具体建议（大陆分布、地形、地点布局等），可以输出地形参数供用户手动调整。' +
+      '当前地图状态：\n' + ctx;
+    const hist = chat.messages.slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+    this.mapBusy = true;
+    try {
+      const reply = await AI.chat([{ role: 'system', content: sys }, ...hist]);
+      chat.messages.push({ role: 'assistant', content: reply, ts: Date.now(), meta: { ...meta, reqText: text } });
+      await dbPut('chat', chat);
+      await logAdd('地图', '地图AI对话：' + text.slice(0, 30));
+    } catch (e) {
+      chat.messages.push({ role: 'assistant', content: '⚠️ ' + e.message, ts: Date.now(), meta: { err: true } });
+      await dbPut('chat', chat);
+      toast(e.message, 'err');
+    }
+    this.mapBusy = false;
+    this.renderMapChat();
+  },
+
+  /* 按草图生成地形：AI 读取草图统计 → 输出地形参数 → 应用 */
+  async genFromSketch() {
+    if (this.mapBusy) { toast('AI 正在处理中…', 'info'); return; }
+    if (!this.sketch.length) { toast('请先在地图上画草图（点「✏️ 画草图」后用笔画），再让 AI 按草图生成', 'err'); return; }
+    const chat = await dbGet('chat', 'mapchat') || { id: 'mapchat', messages: [] };
+    chat.messages.push({ role: 'user', content: '请根据我的草图生成地图地形。\n' + this.sketchStats(), ts: Date.now() });
+    await dbPut('chat', chat);
+    this.renderMapChat();
+    this.mapBusy = true;
+    try {
+      const ctx = await this.mapContext();
+      const data = await AI.json([
+        { role: 'system', content: '你是小说世界地图生成器。根据用户草图的覆盖区域与分布，输出最贴合草图的地形参数 JSON。\n当前地图状态：\n' + ctx },
+        { role: 'user', content: '输出：{"seed":正整数,"continents":1-6,"mountains":0.1-1,"rivers":0-15,"forests":0-0.8,"note":"一句设计说明"}' }
+      ]);
+      const v = this.getCur();
+      v.terrainType = 'proc';
+      v.terrain = this.applyTerrain({
+        seed: parseInt(data.seed) || undefined,
+        continents: parseInt(data.continents),
+        mountains: parseFloat(data.mountains),
+        rivers: parseInt(data.rivers),
+        forests: parseFloat(data.forests)
+      });
+      await this.saveMap();
+      this.draw();
+      chat.messages.push({ role: 'assistant', content: '🌍 已按草图生成地形：大陆' + v.terrain.continents + '块，山脉' + v.terrain.mountains + '，河流' + v.terrain.rivers + '条。\n' + (data.note || '') + '\n（参数已应用，可点「🌍 生成/重置地形」再微调）', ts: Date.now(), meta: { kind: 'mapgen' } });
+      await dbPut('chat', chat);
+      await logAdd('地图', 'AI 按草图生成地形（种子 ' + v.terrain.seed + '）');
+      this.renderMapChat();
+      toast('已按草图生成地形', 'ok');
+    } catch (e) {
+      chat.messages.push({ role: 'assistant', content: '⚠️ ' + e.message, ts: Date.now(), meta: { err: true } });
+      await dbPut('chat', chat);
+      toast(e.message, 'err');
+    }
+    this.mapBusy = false;
+    this.renderMapChat();
+  },
+
+  /* 统一的参数应用（带合法范围钳制） */
+  applyTerrain(p) {
+    return {
+      seed: parseInt(p.seed) || Math.floor(Math.random() * 1e9),
+      continents: Math.max(1, Math.min(6, parseInt(p.continents) || 3)),
+      mountains: Math.max(0.1, Math.min(1, parseFloat(p.mountains) || 0.5)),
+      rivers: Math.max(0, Math.min(15, parseInt(p.rivers) || 6)),
+      forests: Math.max(0, Math.min(0.8, parseFloat(p.forests) || 0.4))
+    };
+  },
+
+  /* 导入草图图片：压缩 → 存本地 → 作为半透明底图叠加 */
+  async importSketchImage() {
+    const f = await filePicker('image/*');
+    if (!f) return;
+    try {
+      const dataUrl = await compressImage(f);
+      this.sketchImage = { dataUrl, name: f.name };
+      this.showSketchImage = true;
+      this._sketchImgEl = null;
+      await this.saveMap();
+      await logAdd('地图', '导入草图图片「' + f.name + '」');
+      toast('草图图片已导入，作为半透明底图叠加在地图上', 'ok');
+      this.draw();
+    } catch (e) {
+      toast('导入失败：' + e.message, 'err');
+    }
+  },
+
+  /* AI 分析草图图片（需要支持图片的视觉模型）→ 生成地形 */
+  async analyzeSketchImage() {
+    if (!this.sketchImage) { toast('请先点「🖼️ 导入草图」导入一张草图图片', 'err'); return; }
+    if (this.mapBusy) return;
+    const chat = await dbGet('chat', 'mapchat') || { id: 'mapchat', messages: [] };
+    chat.messages.push({ role: 'user', content: '（附草图图片）请分析我的世界草图，识别大陆轮廓、山川河流与地点布局，并生成地形。', ts: Date.now() });
+    await dbPut('chat', chat);
+    this.renderMapChat();
+    this.mapBusy = true;
+    try {
+      const ctx = await this.mapContext();
+      const reply = await AI.chat([
+        { role: 'system', content: '你是小说世界地图规划师。分析用户提供的世界草图图片，识别大陆轮廓、山脉河流走向、地点分布，并输出地形参数。当前地图状态：\n' + ctx },
+        { role: 'user', content: [
+          { type: 'text', text: '请分析这张世界草图，输出：{"seed":正整数,"continents":1-6,"mountains":0.1-1,"rivers":0-15,"forests":0-0.8,"note":"设计说明","layout":"用两句话描述识别到的地理布局（哪边是海、山脉在哪、建议地点放哪）"}' },
+          { type: 'image_url', image_url: { url: this.sketchImage.dataUrl } }
+        ] }
+      ]);
+      const m = reply.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error('AI 未返回可解析的 JSON');
+      const data = JSON.parse(m[0]);
+      const v = this.getCur();
+      v.terrainType = 'proc';
+      v.terrain = this.applyTerrain(data);
+      await this.saveMap();
+      this.draw();
+      chat.messages.push({
+        role: 'assistant',
+        content: '🖼️ 已分析草图并应用地形：大陆' + v.terrain.continents + '块，山脉' + v.terrain.mountains + '，河流' + v.terrain.rivers + '条。\n' + (data.layout ? '📐 ' + data.layout + '\n' : '') + (data.note || ''),
+        ts: Date.now(), meta: { kind: 'mapgen' }
+      });
+      await dbPut('chat', chat);
+      await logAdd('地图', 'AI 分析草图图片并生成地形');
+      this.renderMapChat();
+      toast('已按草图图片生成地形', 'ok');
+    } catch (e) {
+      const tip = String(e.message).includes('400') ? '（当前模型可能不支持图片，可在设置里换成视觉模型，如 qwen-vl-plus / glm-4v / gpt-4o）' : '';
+      chat.messages.push({ role: 'assistant', content: '⚠️ ' + e.message + tip, ts: Date.now(), meta: { err: true } });
+      await dbPut('chat', chat);
+      toast(e.message, 'err');
+    }
+    this.mapBusy = false;
+    this.renderMapChat();
+  },
+
+  /* 布局描述：把当前地点/区域/对话转成文字布局（供 AI 组装绘图提示词） */
+  layoutDescription() {
+    const ver = this.getCur();
+    if (!ver) return '（还没有任何地点标记）';
+    const pos = (x, y) => {
+      const hz = x < 0.33 ? '西部' : x < 0.66 ? '中部' : '东部';
+      const vt = y < 0.33 ? '北部' : y < 0.66 ? '中部' : '南部';
+      return hz + (vt === '中部' && hz === '中部' ? '' : vt === '中部' ? '偏' + hz.slice(0, 1) : vt);
+    };
+    const lines = ver.markers.map(m => `「${m.name}」位于${pos(m.x, m.y)}${m.desc ? '（' + m.desc + '）' : ''}`);
+    const regs = ver.regions.map(r => `势力「${r.name}」的领地位于中部偏${r.points[0] ? pos(r.points[0].x, r.points[0].y) : '中'}`);
+    return (lines.length ? lines.join('；') : '还没有地点标记') + (regs.length ? '；' + regs.join('；') : '');
+  },
+
+  /* 🎨 AI 生成底图：对话/草图描述 → LLM 组装提示词 → 文生图 → 预览 → 确认导入 */
+  async aiGenerateBaseImage() {
+    if (this.mapBusy) { toast('AI 正在处理中…', 'info'); return; }
+    const ver = this.getCur();
+    if (!ver) return;
+    // 1. 收集用户描述 + 风格选择
+    const styleSel = el('select', { class: 'input' });
+    const STYLES = [
+      ['real', '🗺 复古信息地图（亚洲地图式：浅色底、山脉河流湖泊、图例、罗盘、卷轴标题）'],
+      ['anime', '🎨 动漫奇幻风（色彩鲜明、手绘幻想感）'],
+      ['ink', '🖌 水墨国风（宣纸质感、留白、淡彩）'],
+      ['parch', '📜 羊皮纸手绘风（复古羊皮纸、手绘线条）']
+    ];
+    for (const [v, t] of STYLES) styleSel.appendChild(el('option', { value: v, text: t }));
+    const desc = el('textarea', { class: 'input', style: 'width:100%;min-height:70px', placeholder: '描述你想要的地图布局/细节（如：东边是大海，中部大山脉，西北雪山…可留空按现有地点布局生成）' });
+    const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
+      el('div', {}, el('div', { class: 'muted', text: '地图风格' }), styleSel),
+      el('div', {}, el('div', { class: 'muted', text: '布局描述' }), desc)
+    );
+    const ok = await modal({ title: '🎨 AI 生成地图底图', body, okText: '🎨 生成', cancelText: '取消' });
+    if (!ok) return;
+    const want = desc.value.trim();
+    const style = styleSel.value;
+    const chat = await dbGet('chat', 'mapchat') || { id: 'mapchat', messages: [] };
+    const recent = chat.messages.slice(-6).filter(m => m.role === 'user').map(m => m.content).join('；');
+    const STYLE_DESC = {
+      real: '复古信息地图风格，类似精美的纸质地图册插画：浅米色纸面底、清晰的国界/区域边界线、山脉用棕色锯齿线、河流湖泊蓝色、森林绿色点缀、含图例与罗盘、卷轴式标题横幅',
+      anime: '动漫奇幻世界地图插画风格：色彩鲜明精致、手绘幻想感、充满冒险气息',
+      ink: '中国传统水墨国风地图：宣纸质感、留白、墨色山脉淡彩晕染、意境悠远',
+      parch: '复古羊皮纸手绘地图：羊皮纸质感底色、手绘线条、探险古地图的韵味'
+    };
+    this.mapBusy = true;
+    toast('🎨 AI 正在组装提示词并绘图，请稍候…（约 10~30 秒）', 'info');
+    try {
+      // 2. LLM 组装绘图提示词（带入地点布局 + 用户描述 + 对话 + 风格）
+      const ctx = await this.mapContext();
+      const prompt = await AI.chat([
+        { role: 'system', content: '你是地图插画提示词工程师。根据地点布局与用户描述，生成一段高质量的「地图插画」文生图提示词。\n风格要求：' + STYLE_DESC[style] + '\n要求：整体俯瞰视角、色彩鲜明精致、地理要素清晰（陆地海洋山脉河流都要表现）；不要绘制任何文字或标签（地名由应用层叠加，画文字会乱码）；把每个地点按方位写进画面描述。直接输出提示词正文，不要解释。' },
+        { role: 'user', content: '当前地图布局：\n' + this.layoutDescription() + '\n\n版本事件：' + (ver.event || '无') + '\n用户描述：' + (want || '（无，按布局自由发挥）') + '\n对话背景：' + (recent || '（无）') }
+      ]);
+      // 3. 文生图
+      const dataUrl = await AI.genImage(prompt.trim());
+      // 4. 预览确认
+      const imgEl = el('img', { src: dataUrl, style: 'width:100%;border-radius:10px;display:block' });
+      const hint = el('div', { class: 'muted', style: 'margin-top:8px;line-height:1.7', text: '满意就「导入为底图」（建议新建版本），不满意点「换一张」重新生成。' });
+      const body = el('div', {}, imgEl, hint);
+      let decision = await modal({
+        title: '🎨 AI 地图底图预览',
+        body,
+        okText: '✅ 导入为底图',
+        cancelText: '🔄 换一张',
+        okClass: 'primary'
+      });
+      if (decision === null) { this.mapBusy = false; return; } // 点 ✕
+      if (!decision) {
+        // 换一张：重新调用
+        this.mapBusy = false;
+        await this.aiGenerateBaseImage();
+        return;
+      }
+      // 5. 导入：建议新建版本
+      const mkVer = await modal({
+        title: '导入底图',
+        body: `<p style="line-height:1.7">底图导入后，现有地点标记/势力区域/版本历史都会保留。<br>建议<b>新建版本</b>记录这次地图更迭。</p>`,
+        okText: '📸 新建版本并导入',
+        cancelText: '直接替换当前底图'
+      });
+      if (mkVer) {
+        const label = await promptDlg('版本名', 'v' + (this.map.versions.length + 1) + ' · AI底图', '版本名');
+        const event = await promptDlg('这一版本发生了什么？', '', '如：天工造物，世界以新貌呈现（可留空）');
+        const v = {
+          id: uid(), label: label || ('v' + (this.map.versions.length + 1)),
+          event: event || 'AI 生成新底图', time: Date.now(),
+          markers: JSON.parse(JSON.stringify(ver.markers)),
+          regions: JSON.parse(JSON.stringify(ver.regions)),
+          terrain: { ...ver.terrain },
+          terrainType: 'image',
+          imageData: { dataUrl, prompt: prompt.trim() }
+        };
+        this.map.versions.push(v);
+        this.map.current = this.map.versions.length - 1;
+      } else {
+        ver.terrainType = 'image';
+        ver.imageData = { dataUrl, prompt: prompt.trim() };
+      }
+      await this.saveMap();
+      await logAdd('地图', 'AI 生成动漫底图并导入（' + (mkVer ? '新建版本' : '替换当前底图') + '）');
+      this.render();
+      this.renderMapChat();
+      toast('底图已导入，可继续添加地点/势力区域', 'ok');
+    } catch (e) {
+      toast('生成失败：' + e.message, 'err');
+    }
+    this.mapBusy = false;
+  },
+
+  /* ➕ 扩充大陆：在现有地图右侧/下方追加海域+新大陆，旧内容与标记保持原位 */
+  async expandMap() {
+    const ver = this.getCur();
+    if (!ver) return;
+    if (ver.terrainType === 'image') { toast('AI 底图模式下暂不支持扩充，可先切回「🌍 生成/重置地形」', 'err'); return; }
+    const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' });
+    const dirSel = el('select', { class: 'input' });
+    dirSel.appendChild(el('option', { value: 'right', text: '向右扩充（新大陆在右侧，中间大海隔开）' }));
+    dirSel.appendChild(el('option', { value: 'down', text: '向下扩充（新大陆在下方，中间大海隔开）' }));
+    body.appendChild(el('div', {}, el('div', { class: 'muted', text: '扩充方向' }), dirSel));
+    const ok = await modal({ title: '➕ 扩充大陆', body, okText: '扩充', cancelText: '取消' });
+    if (!ok) return;
+    this.mapBusy = true;
+    try {
+      const t = ver.terrain || { seed: 1, continents: 3, mountains: 0.5, rivers: 6, forests: 0.4 };
+      const oldW = t.W || this.W, oldH = t.H || this.H;
+      const oldHm = t.heightmap ? this.decodeHeightmap(t.heightmap) : null;
+      const newW = dirSel.value === 'right' ? Math.round(oldW * 1.6) : oldW;
+      const newH = dirSel.value === 'down' ? Math.round(oldH * 1.6) : oldH;
+      const h = new Float32Array(newW * newH);
+      // 1) 复制旧区域（保持左上原位）
+      if (oldHm) {
+        for (let y = 0; y < oldH; y++) for (let x = 0; x < oldW; x++) h[y * newW + x] = oldHm[y * oldW + x] / 255;
+      } else {
+        const old = this.genTerrain(t).h;
+        for (let y = 0; y < oldH; y++) for (let x = 0; x < oldW; x++) h[y * newW + x] = old[y * oldW + x];
+      }
+      // 2) 新区域：海洋 + 新大陆（独立噪声，中间留海带）
+      Noise.seed((t.seed || 1) ^ 0xabcdef);
+      const gap = Math.round(Math.min(oldW, oldH) * 0.08); // 与旧大陆之间的海带宽度
+      const x0 = dirSel.value === 'right' ? oldW + gap : 0;
+      const y0 = dirSel.value === 'down' ? oldH + gap : 0;
+      const cw = newW - x0, ch = newH - y0;
+      for (let y = y0; y < newH; y++) {
+        for (let x = x0; x < newW; x++) {
+          const nx = (x - x0) / cw - 0.5, ny = (y - y0) / ch - 0.5;
+          const dist = Math.sqrt(nx * nx + ny * ny) / 0.62;
+          let e = Noise.fbm(x * 0.016 + 100, y * 0.016 + 100, 5) * 0.75 + 0.2 * Math.cos(Math.atan2(ny, nx) * 2 + 5);
+          e -= dist * dist * 1.2;
+          h[y * newW + x] = e;
+        }
+      }
+      // 3) 标记/区域坐标重新归一化（保持屏幕相对位置）
+      const fx = (vx) => vx * (oldW / newW);
+      const fy = (vy) => vy * (oldH / newH);
+      for (const m of ver.markers) { m.x = fx(m.x); m.y = fy(m.y); }
+      for (const r of ver.regions) for (const p of r.points) { p.x = fx(p.x); p.y = fy(p.y); }
+      // 4) 保存为新版本
+      const label = await promptDlg('版本名', 'v' + (this.map.versions.length + 1) + ' · 扩充新大陆', '版本名');
+      if (label === null) { this.mapBusy = false; return; }
+      const event = await promptDlg('新大陆上发生了什么/叫什么？', '', '如：远渡重洋发现新大陆（可留空）');
+      const v = {
+        id: uid(), label: label || ('v' + (this.map.versions.length + 1)),
+        event: event || '扩充新大陆', time: Date.now(),
+        markers: JSON.parse(JSON.stringify(ver.markers)),
+        regions: JSON.parse(JSON.stringify(ver.regions)),
+        terrain: {
+          seed: t.seed, continents: t.continents, mountains: t.mountains,
+          rivers: t.rivers, forests: t.forests,
+          W: newW, H: newH, heightmap: this.encodeHeightmap(h)
+        },
+        terrainType: 'proc'
+      };
+      this.map.versions.push(v);
+      this.map.current = this.map.versions.length - 1;
+      await this.saveMap();
+      await logAdd('地图', '扩充大陆（' + dirSel.value + '，' + oldW + '×' + oldH + ' → ' + newW + '×' + newH + '）');
+      this.render();
+      toast('已扩充：新大陆已加入，中间大海隔开', 'ok');
+    } catch (e) {
+      toast('扩充失败：' + e.message, 'err');
+    }
+    this.mapBusy = false;
+  },
+
+  async renderMapChat() {
+    const chat = await dbGet('chat', 'mapchat') || { id: 'mapchat', messages: [] };
+    const box = $('#map-chat-box', this.c);
+    if (!box) return;
+    box.innerHTML = '';
+    if (!chat.messages.length) {
+      box.innerHTML = '<div class="empty-tip">和地图 AI 聊你的世界构想：<br>· 描述地理（"东边是海，中部大山脉"）<br>· 让它规划大陆和地点<br>· 先点「✏️ 画草图」涂几笔 → 「🌍 按草图生成地形」</div>';
+      return;
+    }
+    for (const m of chat.messages) {
+      const div = el('div', { class: 'msg ' + (m.role === 'user' ? 'user' : 'ai') });
+      div.textContent = m.content;
+      div.appendChild(el('div', { class: 'meta', text: new Date(m.ts || Date.now()).toLocaleTimeString('zh-CN', { hour12: false }) }));
+      box.appendChild(div);
+    }
+    box.scrollTop = box.scrollHeight;
+  },
+
+  /* ---------- 地形生成与绘制 ---------- */
+
+  /* heightmap 编解码（Uint8 量化 → base64，用于版本持久化与扩充） */
+  encodeHeightmap(h) {
+    const arr = new Uint8Array(h.length);
+    for (let i = 0; i < h.length; i++) arr[i] = Math.max(0, Math.min(255, Math.round(h[i] * 255)));
+    let bin = '';
+    for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+    return btoa(bin);
+  },
+  decodeHeightmap(b64) {
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr;
+  },
+
+  /* 确定性随机（保证同一种子河流结果一致，扩充后重绘不变） */
+  mulberry32(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  },
+
+  genTerrain(t) {
+    const W = t.W || this.W, H = t.H || this.H;
+    const waterLevel = 0.46;
+    let h;
+    if (t.heightmap) {
+      // 已有持久化高度图（扩充后的大画布）
+      const arr = this.decodeHeightmap(t.heightmap);
+      h = new Float32Array(W * H);
+      for (let i = 0; i < arr.length; i++) h[i] = arr[i] / 255;
+    } else {
+      // 程序化生成
+      Noise.seed(t.seed);
+      h = new Float32Array(W * H);
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          // 大陆遮罩：中心向外的衰减 + 噪声
+          const nx = x / W - 0.5, ny = y / H - 0.5;
+          const dist = Math.sqrt(nx * nx + ny * ny) / 0.62;
+          const continents = t.continents;
+          const ang = Math.atan2(ny, nx);
+          const ring = 0.25 * Math.cos(ang * continents + fbm2(x, y, 0.02) * 6);
+          let e = fbm2(x, y, 0.016, 5) * 0.75 + ring + 0.25 * noise2(x, y, 0.05);
+          e -= dist * dist * 1.15;
+          const m = fbm2(x, y, 0.055, 4) * t.mountains * 0.9;
+          e = e + m - m * 0.55;
+          h[y * W + x] = e;
+        }
+      }
+    }
+    // 河流（确定性随机起点，同 seed 结果一致；保存有序路径用于连续曲线绘制）
+    const rng = this.mulberry32((t.seed || 1) ^ 0x9e3779b9);
+    const riverCells = new Set();
+    const riverPaths = [];
+    for (let r = 0; r < (t.rivers || 6); r++) {
+      let x = 8 + Math.floor(rng() * (W - 16));
+      let y = 4 + Math.floor(rng() * (H - 40));
+      const path = [[x, y]];
+      let guard = 0;
+      while (guard++ < 400 && h[y * W + x] > waterLevel) {
+        riverCells.add(y * W + x);
+        let best = null, bv = h[y * W + x];
+        for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, 1]]) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+          if (h[ny * W + nx] < bv) { bv = h[ny * W + nx]; best = [nx, ny]; }
+        }
+        if (!best) break;
+        [x, y] = best;
+        path.push([x, y]);
+      }
+      if (path.length > 1) riverPaths.push(path);
+    }
+    return { h, waterLevel, riverCells, riverPaths, W, H };
+    function fbm2(x, y, f, oct = 4) { return Noise.fbm(x * f, y * f, oct); }
+    function noise2(x, y, f) { return Noise.noise2(x * f, y * f); }
+  },
+
+  /* 生成程序化地形离屏画布：高分辨率平滑着色 + 地图册质感（山体晕线/连续山脉带/蜿蜒河流/海岸线） */
+  renderTerrainOff(ver) {
+    const t = ver.terrain || { seed: 1, continents: 3, mountains: 0.5, rivers: 6, forests: 0.4 };
+    // 缓存：同一地形参数不重复生成
+    const key = [ver.id, t.seed, t.continents, t.mountains, t.rivers, t.forests, t.W, t.H].join(':');
+    if (this._terrainCache && this._terrainCache.key === key) return this._terrainCache.off;
+    const { h, waterLevel, riverCells, riverPaths, W, H } = this.genTerrain(t);
+    // 高分辨率输出（接近显示尺寸，消除放大块状感）
+    const SW = 720;
+    const SH = Math.max(480, Math.round(H / W * SW));
+    const off = document.createElement('canvas');
+    off.width = SW; off.height = SH;
+    const ctx = off.getContext('2d');
+    // 色标（按高度平滑渐变，仿地图册配色）
+    const STOPS = [
+      [0.00, [82, 118, 154]],
+      [0.32, [116, 154, 188]],
+      [0.42, [162, 190, 212]],
+      [0.455, [196, 212, 228]],
+      [0.485, [222, 210, 176]],
+      [0.55, [238, 230, 198]],
+      [0.62, [224, 210, 166]],
+      [0.72, [194, 164, 116]],
+      [0.84, [166, 134, 90]],
+      [1.00, [232, 228, 216]]
+    ];
+    const colorAt = (e) => {
+      e = Math.max(0, Math.min(1, e));
+      for (let i = 1; i < STOPS.length; i++) {
+        if (e <= STOPS[i][0]) {
+          const [e0, c0] = STOPS[i - 1], [e1, c1] = STOPS[i];
+          const k = (e - e0) / (e1 - e0 || 1);
+          return [Math.round(c0[0] + (c1[0] - c0[0]) * k), Math.round(c0[1] + (c1[1] - c0[1]) * k), Math.round(c0[2] + (c1[2] - c0[2]) * k)];
+        }
+      }
+      return STOPS[STOPS.length - 1][1];
+    };
+    // 逐像素双线性插值着色（陆地加水彩斑驳调制，避免纯色块感）
+    const img = ctx.createImageData(SW, SH);
+    const lerp = (a, b, k) => a + (b - a) * k;
+    // 低分辨率斑驳纹理（水彩不均匀感）
+    const speckle = new Float32Array(W * H);
+    Noise.seed((t.seed || 1) ^ 0x1234abcd);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) speckle[y * W + x] = Noise.fbm(x * 0.06, y * 0.06, 3);
+    for (let py = 0; py < SH; py++) {
+      const fy = (py / (SH - 1)) * (H - 1);
+      const y0 = Math.floor(fy), y1 = Math.min(y0 + 1, H - 1), ty = fy - y0;
+      for (let px = 0; px < SW; px++) {
+        const fx = (px / (SW - 1)) * (W - 1);
+        const x0 = Math.floor(fx), x1 = Math.min(x0 + 1, W - 1), tx = fx - x0;
+        const e = lerp(lerp(h[y0 * W + x0], h[y0 * W + x1], tx), lerp(h[y1 * W + x0], h[y1 * W + x1], tx), ty);
+        const c = colorAt(e);
+        let r = c[0], g = c[1], b = c[2];
+        if (e > waterLevel + 0.02) {
+          const sp = lerp(lerp(speckle[y0 * W + x0], speckle[y0 * W + x1], tx), lerp(speckle[y1 * W + x0], speckle[y1 * W + x1], tx), ty);
+          const d = (sp - 0.5) * 16;
+          r += d; g += d; b += d;
+        }
+        const i = (py * SW + px) * 4;
+        img.data[i] = Math.max(0, Math.min(255, Math.round(r)));
+        img.data[i + 1] = Math.max(0, Math.min(255, Math.round(g)));
+        img.data[i + 2] = Math.max(0, Math.min(255, Math.round(b)));
+        img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    const S = SW / W; // ≈4.5
+    // 山脉带：山脊格链式连接成连续折线（像地图册的山脉带）
+    const ridge = new Set();
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        const e = h[y * W + x];
+        if (e > 0.66) {
+          const up = h[(y - 1) * W + x], dn = h[(y + 1) * W + x], lt = h[y * W + x - 1], rt = h[y * W + x + 1];
+          if ((e >= up && e >= dn) || (e >= lt && e >= rt)) ridge.add(y * W + x);
+        }
+      }
+    }
+    const visited = new Set();
+    ctx.strokeStyle = 'rgba(124,92,54,0.8)';
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const start of ridge) {
+      if (visited.has(start)) continue;
+      const stack = [start];
+      visited.add(start);
+      const pts = [];
+      while (stack.length) {
+        const cur = stack.pop();
+        const cx = cur % W, cy = (cur / W) | 0;
+        pts.push([cx * S + S / 2, cy * S + S / 2]);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+          const ni = ny * W + nx;
+          if (ridge.has(ni) && !visited.has(ni)) { visited.add(ni); stack.push(ni); }
+        }
+      }
+      if (pts.length >= 2) {
+        // 中点法平滑折线为曲线
+        ctx.beginPath();
+        ctx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length - 1; i++) {
+          const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2;
+          ctx.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
+        }
+        ctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+        ctx.stroke();
+      }
+    }
+    // 河流：每条河画成连续蜿蜒曲线
+    ctx.strokeStyle = 'rgba(86,150,188,0.95)';
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const path of riverPaths) {
+      if (path.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(path[0][0] * S + S / 2, path[0][1] * S + S / 2);
+      for (let i = 1; i < path.length; i++) ctx.lineTo(path[i][0] * S + S / 2, path[i][1] * S + S / 2);
+      ctx.stroke();
+    }
+    // 纸面噪点纹理（更淡）
+    const rng = this.mulberry32((t.seed || 1) ^ 0x9e37d4e8);
+    ctx.fillStyle = 'rgba(110,85,50,0.035)';
+    for (let i = 0; i < (SW * SH) / 160; i++) {
+      ctx.fillRect(Math.floor(rng() * SW), Math.floor(rng() * SH), 1, 1);
+    }
+    // 持久化 heightmap（供扩充/重绘）
+    if (!ver.terrain.heightmap || ver.terrain.W !== W || ver.terrain.H !== H) {
+      ver.terrain.heightmap = this.encodeHeightmap(h);
+      ver.terrain.W = W; ver.terrain.H = H;
+      this.saveMap();
+    }
+    this._terrainCache = { key, off };
+    return off;
+  },
+
+  /* 罗盘玫瑰（屏幕空间装饰） */
+  drawCompass(ctx, x, y, r) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = 'rgba(80,60,35,0.55)';
+    ctx.fillStyle = 'rgba(80,60,35,0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2); ctx.stroke();
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      const tipX = Math.cos(a) * r, tipY = Math.sin(a) * r;
+      const bX = Math.cos(a + 0.2) * r * 0.6, bY = Math.sin(a + 0.2) * r * 0.6;
+      const cX = Math.cos(a - 0.2) * r * 0.6, cY = Math.sin(a - 0.2) * r * 0.6;
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY); ctx.lineTo(bX, bY); ctx.lineTo(cX, cY); ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = '#f7f0df';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.28, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  },
+
+  /* 海洋名称标注：四个角落区域若大部分是水域，标注北海/东海/西海/南海 */
+  drawOceanNames(rect, ver) {
+    const t = ver.terrain || {};
+    const W = t.W || this.W, H = t.H || this.H;
+    if (!t.heightmap) return;
+    const arr = this.decodeHeightmap(t.heightmap);
+    const th = 0.46 * 255;
+    const zones = [
+      { name: '北海', x0: 0.03, y0: 0.03, x1: 0.34, y1: 0.34 },
+      { name: '东海', x0: 0.66, y0: 0.03, x1: 0.97, y1: 0.34 },
+      { name: '西海', x0: 0.03, y0: 0.66, x1: 0.34, y1: 0.97 },
+      { name: '南海', x0: 0.66, y0: 0.66, x1: 0.97, y1: 0.97 }
+    ];
+    const ctx = this.ctx;
+    const w = rect.width * this.view.scale, hgt = rect.height * this.view.scale;
+    ctx.font = 'italic bold 15px sans-serif';
+    ctx.textAlign = 'center';
+    for (const z of zones) {
+      let water = 0, total = 0, sx = 0, sy = 0;
+      const x0 = Math.floor(W * z.x0), x1 = Math.floor(W * z.x1), y0 = Math.floor(H * z.y0), y1 = Math.floor(H * z.y1);
+      for (let y = y0; y < y1; y += 2) {
+        for (let x = x0; x < x1; x += 2) {
+          if (arr[y * W + x] < th) { water++; sx += x; sy += y; }
+          total++;
+        }
+      }
+      if (water / total > 0.5 && water > 0) {
+        const px = (sx / water / W) * w + this.view.ox;
+        const py = (sy / water / H) * hgt + this.view.oy;
+        ctx.fillStyle = 'rgba(63,105,140,0.8)';
+        ctx.fillText(z.name, px, py);
+      }
+    }
+    ctx.textAlign = 'left';
+  },
+
+  /* 现实地图风装饰：卷轴标题 + 罗盘 + 图例 + 边框 */
+  drawDecorations(rect, ver) {
+    const ctx = this.ctx;
+    const W = rect.width, H = rect.height;
+    // 卷轴式标题（顶部居中）
+    const title = '🗺 ' + (ver.label || '世界地图');
+    const sub = ver.event ? ver.event : (ver.markers.length ? '已标注 ' + ver.markers.length + ' 个地点' : '山川河流·地域分布');
+    ctx.font = 'bold 20px sans-serif';
+    const tw = ctx.measureText(title).width + 56;
+    const ty = 16;
+    ctx.fillStyle = 'rgba(248,242,228,0.92)';
+    ctx.strokeStyle = 'rgba(120,90,50,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(W / 2 - tw / 2, ty, tw, 44, 8);
+    ctx.fill();
+    ctx.stroke();
+    // 卷轴两端
+    ctx.fillStyle = 'rgba(200,160,100,0.85)';
+    ctx.beginPath(); ctx.arc(W / 2 - tw / 2 - 2, ty + 22, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(W / 2 + tw / 2 + 2, ty + 22, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5a4628';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(title, W / 2, ty + 27);
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#8a6e4a';
+    ctx.fillText(sub, W / 2, ty + 40);
+    ctx.textAlign = 'left';
+    // 罗盘（右上角）
+    this.drawCompass(ctx, W - 70, 96, 40);
+    // 图例（左下角）
+    const lx = 18, ly = H - 118, lw = 158;
+    ctx.fillStyle = 'rgba(248,242,228,0.9)';
+    ctx.strokeStyle = 'rgba(120,90,50,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(lx, ly, lw, 104, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#5a4628';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('图例', lx + 10, ly + 18);
+    ctx.font = '11px sans-serif';
+    const rows = [
+      ['#8a6b45', '山脉'],
+      ['#5d9fc4', '河流'],
+      ['#7ba05e', '森林'],
+      ['#c98b4b', '势力领地']
+    ];
+    rows.forEach((r, i) => {
+      const y = ly + 36 + i * 17;
+      ctx.fillStyle = r[0];
+      ctx.fillRect(lx + 10, y - 8, 12, 8);
+      ctx.fillStyle = '#5a4628';
+      ctx.fillText(r[1], lx + 30, y);
+    });
+    // 边框（浅色双线）
+    ctx.strokeStyle = 'rgba(120,90,50,0.4)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(10, 10, W - 20, H - 20);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(15, 15, W - 30, H - 30);
+  },
+
+  draw() {
+    if (!this.map) return;
+    const cv = this.canvas, ctx = this.ctx;
+    const rect = this.stage.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.max(1, Math.floor(rect.width * dpr));
+    cv.height = Math.max(1, Math.floor(rect.height * dpr));
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#10141c';
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    const ver = this.getCur();
+    const w = rect.width * this.view.scale, hgt = rect.height * this.view.scale;
+    ctx.imageSmoothingEnabled = true;
+    if (ver.terrainType === 'image' && ver.imageData && ver.imageData.dataUrl) {
+      // AI 生成底图
+      if (!this._aiImgEl || this._aiImgEl.src !== ver.imageData.dataUrl) {
+        const im = new Image();
+        im.src = ver.imageData.dataUrl;
+        this._aiImgEl = im;
+        im.onload = () => { if (this._aiImgEl === im) this.draw(); };
+      }
+      if (this._aiImgEl.complete && this._aiImgEl.naturalWidth) {
+        ctx.drawImage(this._aiImgEl, this.view.ox, this.view.oy, w, hgt);
+      }
+    } else {
+      // 程序化地形（现实信息地图风）
+      const off = this.renderTerrainOff(ver);
+      ctx.drawImage(off, this.view.ox, this.view.oy, w, hgt);
+      this.drawOceanNames(rect, ver);
+      this.drawDecorations(rect, ver);
+    }
+    // 导入的草图底图（半透明叠加）
+    if (this.showSketchImage && this.sketchImage) {
+      if (!this._sketchImgEl) {
+        const im = new Image();
+        im.src = this.sketchImage.dataUrl;
+        this._sketchImgEl = im;
+        im.onload = () => { if (this._sketchImgEl === im) this.draw(); };
+      }
+      if (this._sketchImgEl.complete && this._sketchImgEl.naturalWidth) {
+        ctx.save();
+        ctx.globalAlpha = 0.4;
+        ctx.drawImage(this._sketchImgEl, this.view.ox, this.view.oy, w, hgt);
+        ctx.restore();
+      }
+    }
+    // 势力区域
+    for (const r of ver.regions) {
+      ctx.beginPath();
+      r.points.forEach((p, i) => i ? ctx.lineTo(p.x * w + this.view.ox, p.y * hgt + this.view.oy) : ctx.moveTo(p.x * w + this.view.ox, p.y * hgt + this.view.oy));
+      ctx.closePath();
+      ctx.fillStyle = r.color + '44';
+      ctx.fill();
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      const cx = r.points.reduce((s, p) => s + p.x, 0) / r.points.length;
+      const cy = r.points.reduce((s, p) => s + p.y, 0) / r.points.length;
+      ctx.fillStyle = r.color;
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(r.name, cx * w + this.view.ox, cy * hgt + this.view.oy - 10);
+    }
+    // 区域绘制中的临时点
+    if (this.regionMode && this.regionPts.length) {
+      ctx.strokeStyle = '#ffd27d';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      this.regionPts.forEach((p, i) => i ? ctx.lineTo(p.x * w + this.view.ox, p.y * hgt + this.view.oy) : ctx.moveTo(p.x * w + this.view.ox, p.y * hgt + this.view.oy));
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // 地点标记
+    const types = { '宗门': '🏯', '城市': '🏙️', '秘境': '✨', '战场': '⚔️', '其他': '📌' };
+    for (const m of ver.markers) {
+      if (this.curType !== '全部' && m.type !== this.curType) continue;
+      const px = m.x * w + this.view.ox, py = m.y * hgt + this.view.oy;
+      const r = 16 / Math.sqrt(this.view.scale);
+      ctx.beginPath();
+      ctx.arc(px, py, r + 4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fill();
+      ctx.font = (r * 1.6) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(types[m.type] || '📌', px, py);
+      ctx.textBaseline = 'alphabetic';
+      if (this.view.scale > 0.8) {
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 3;
+        ctx.strokeText(m.name, px, py + r + 16);
+        ctx.fillText(m.name, px, py + r + 16);
+      }
+    }
+    // 草图叠加（黄色半透明笔画）
+    if (this.sketch.length) {
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (const s of this.sketch) {
+        if (!s.points || s.points.length < 2) continue;
+        ctx.beginPath();
+        s.points.forEach((p, i) => i ? ctx.lineTo(p.x * w + this.view.ox, p.y * hgt + this.view.oy) : ctx.moveTo(p.x * w + this.view.ox, p.y * hgt + this.view.oy));
+        ctx.strokeStyle = s.color || this.sketchColor;
+        ctx.globalAlpha = 0.75;
+        ctx.lineWidth = 4 / Math.sqrt(this.view.scale);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+};
+
+PageMods.map = MapPage;
+
+;
+;/* ==== detect.js ==== */
+'use strict';
+/* ===== 检测页：矛盾/设定错误检测（只报告不改写）+ 操作日志 ===== */
+
+const Detect = {
+  mounted: false,
+  issues: [],
+
+  loadIssues() { try { this.issues = JSON.parse(localStorage.getItem('workbench_issues') || '[]'); } catch { this.issues = []; } },
+  saveIssues() { localStorage.setItem('workbench_issues', JSON.stringify(this.issues)); },
+
+  async mount(c) {
+    this.c = c;
+    this.loadIssues();
+    c.innerHTML = `
+      <div class="page-inner">
+        <div class="page-title">
+          🔍 一致性检测
+          <div class="spacer"></div>
+          <button id="d-current" class="btn small">🔍 检查当前章节</button>
+          <button id="d-all" class="btn primary small">🔍 检查全书（分批）</button>
+        </div>
+        <div class="muted" style="margin-bottom:12px;line-height:1.8">
+          检测原则：AI 只负责<b>发现问题并指出位置</b>，绝不直接修改你的正文。每条问题都带原文引用与置信度，是否修改由你决定。
+        </div>
+        <div id="d-progress" class="muted" style="margin-bottom:10px"></div>
+        <div id="d-list"></div>
+        <div class="page-title" style="margin-top:26px">📜 AI 操作日志 <div class="spacer"></div><button id="d-log-clear" class="btn small danger">清空日志</button></div>
+        <div id="d-log"></div>
+      </div>`;
+    $('#d-current', c).onclick = async () => {
+      const ch = await dbGet('chapters', Writing.curId);
+      if (!ch) { toast('请先在写作页打开一个章节', 'err'); return; }
+      await this.run([ch]);
+    };
+    $('#d-all', c).onclick = async () => {
+      const chapters = await dbAll('chapters');
+      if (!chapters.length) { toast('还没有章节', 'err'); return; }
+      await this.run(chapters);
+    };
+    $('#d-log-clear', c).onclick = async () => {
+      if (!(await confirmDlg('清空操作日志？'))) return;
+      await dbClear('log');
+      this.renderLog();
+    };
+    await this.renderIssues();
+    await this.renderLog();
+  },
+  async focus() { await this.renderIssues(); await this.renderLog(); },
+
+  /* 分批检测 */
+  async run(chapters) {
+    const ctx = await AI.projectContext();
+    const sys = '你是小说一致性审校员。对照【世界观设定】与【人物卡】，检查正文中的设定错误与前后矛盾（如：身高/年龄/时间线/地名/能力前后不一致，或与设定库冲突）。' +
+      '同时检查【人设崩塌】：人物言行是否符合其【人物卡】中的性格与说话风格（如活泼的人被写得沉默寡言）。' +
+      '铁律：只报告，绝不修改任何文本。\n' + ctx.text;
+    const prog = $('#d-progress', this.c);
+    const chunks = [];
+    let cur = [], len = 0;
+    for (const ch of chapters) {
+      const text = '【' + ch.title + '】\n' + (ch.content || '');
+      if (len + text.length > 25000 && cur.length) { chunks.push(cur); cur = []; len = 0; }
+      cur.push(text); len += text.length;
+    }
+    if (cur.length) chunks.push(cur);
+    const found = [];
+    for (let i = 0; i < chunks.length; i++) {
+      prog.textContent = `⏳ 正在检查第 ${i + 1}/${chunks.length} 批…`;
+      const user = '以下是待检查的小说正文：\n"""\n' + chunks[i].join('\n\n') + '\n"""\n' +
+        '输出：{"issues":[{"confidence":"high|med|low","chapter":"所在章节名","quote":"矛盾原文摘录(20字内)","analysis":"为什么是矛盾","suggestion":"建议改法"}]}。没有矛盾就输出 {"issues":[]}。';
+      try {
+        const data = await AI.json([{ role: 'system', content: sys }, { role: 'user', content: user }]);
+        for (const it of (data.issues || [])) {
+          if (!it.analysis) continue;
+          found.push({
+            id: uid(), time: Date.now(), confidence: it.confidence || 'med',
+            chapter: it.chapter || '', quote: it.quote || '', analysis: it.analysis,
+            suggestion: it.suggestion || '', status: 'open'
+          });
+        }
+      } catch (e) {
+        toast('第 ' + (i + 1) + ' 批检测失败：' + e.message, 'err');
+      }
+    }
+    prog.textContent = '';
+    this.issues = [...found, ...this.issues];
+    this.saveIssues();
+    await logAdd('检测', '完成一次一致性检查，发现 ' + found.length + ' 处问题');
+    toast('检测完成：发现 ' + found.length + ' 处可能问题', found.length ? 'err' : 'ok');
+    this.renderIssues();
+  },
+
+  renderIssues() {
+    const box = $('#d-list', this.c);
+    box.innerHTML = '';
+    const open = this.issues.filter(i => i.status === 'open');
+    if (!open.length) {
+      box.innerHTML = '<div class="empty-tip">暂无未处理的问题。点「检查当前章节」或「检查全书」开始检测。</div>';
+      return;
+    }
+    for (const it of open) {
+      const cls = it.confidence === 'high' ? 'high' : it.confidence === 'low' ? 'low' : 'med';
+      box.appendChild(el('div', { class: 'issue ' + cls },
+        el('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
+          el('b', { text: ({ high: '⚠️ [高置信]', med: '⚠️ [中置信]', low: 'ℹ️ [低置信]' })[it.confidence] || '⚠️' }),
+          el('span', { class: 'count', text: it.chapter || '未知章节' })
+        ),
+        el('div', { style: 'margin-top:6px;font-size:14px;line-height:1.7', text: it.analysis }),
+        it.quote ? el('div', { class: 'q', text: '原文：' + it.quote }) : null,
+        it.suggestion ? el('div', { class: 'muted', text: '建议：' + it.suggestion }) : null,
+        el('div', { class: 'acts' },
+          el('button', { class: 'btn small primary', text: '📍 定位到章节', onclick: async () => {
+            if (it.chapter) {
+              const chapters = await dbAll('chapters');
+              const ch = chapters.find(x => x.title === it.chapter);
+              if (ch) {
+                await Writing.open(ch.id);
+                App.navTo('writing');
+                toast('已打开章节「' + ch.title + '」，找到问题位置后自行修改（AI 不会替你改）', 'ok');
+                return;
+              }
+            }
+            App.navTo('writing');
+          } }),
+          el('button', { class: 'btn small', text: '✅ 我已处理', onclick: async () => {
+            it.status = 'fixed';
+            this.saveIssues();
+            await logAdd('检测', '问题已处理：' + it.analysis.slice(0, 30));
+            this.renderIssues();
+          } }),
+          el('button', { class: 'btn small', text: '🙈 忽略（误报）', onclick: async () => {
+            it.status = 'ignored';
+            this.saveIssues();
+            this.renderIssues();
+          } })
+        )
+      ));
+    }
+  },
+
+  async renderLog() {
+    const box = $('#d-log', this.c);
+    const logs = await dbAll('log');
+    logs.sort((a, b) => b.time - a.time);
+    box.innerHTML = '';
+    if (!logs.length) { box.innerHTML = '<div class="muted">暂无操作记录。AI 的每一次行为（生成/采纳/识别/检测/改名…）都会记录在这里。</div>'; return; }
+    const TAG = { 'AI对话': '🤖', '采纳': '✅', '章节': '📖', '人物': '👥', '世界观': '🌍', '宗门': '🏯', '地图': '🗺️', '检测': '🔍', '设置': '⚙️', '数据': '📦', '撤销': '↩' };
+    for (const l of logs.slice(0, 100)) {
+      box.appendChild(el('div', { class: 'log-item' },
+        el('span', { class: 't', text: new Date(l.time).toLocaleString('zh-CN', { hour12: false }) }),
+        el('span', { class: 'tag', text: (TAG[l.type] || '·') + ' ' + l.type }),
+        el('span', { class: 'd', text: l.desc })
+      ));
+    }
+    if (logs.length > 100) box.appendChild(el('div', { class: 'muted', style: 'padding:8px', text: '（仅显示最近 100 条）' }));
+  }
+};
+
+PageMods.detect = Detect;
+
+;
+;App.boot();
+</script>
+</body>
+</html>
