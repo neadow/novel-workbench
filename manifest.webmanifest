@@ -1,0 +1,17 @@
+{
+  "name": "小说创作工作台",
+  "short_name": "小说台",
+  "description": "AI 辅助网文创作工作台：章节写作、人物卡、世界观、宗门布局、世界地图、矛盾检测",
+  "lang": "zh-CN",
+  "start_url": "./手机版.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f7f3ea",
+  "theme_color": "#c98b4b",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
