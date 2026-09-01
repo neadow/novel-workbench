@@ -235,23 +235,40 @@ nav.bottom { display: none; }
   nav.bottom {
     display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg2);
     border-top: 1px solid var(--line); z-index: 70;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   nav.bottom button {
-    flex: 1; padding: 8px 2px 10px; font-size: 11px; background: none; border: none;
+    flex: 1; padding: 9px 2px 11px; font-size: 11px; background: none; border: none;
     color: var(--ink2); display: flex; flex-direction: column; gap: 2px; align-items: center;
   }
   nav.bottom button.on { color: var(--accent); font-weight: 700; }
-  main { padding-bottom: 54px; }
+  /* 底部空间给到 .page 自身（absolute 定位不受 main padding 影响） */
+  main { padding-bottom: 0; }
+  .page { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
   .w-list {
     position: fixed; left: 0; top: 0; bottom: 0; width: min(82vw, 300px); z-index: 80;
     transform: translateX(-105%); transition: transform .25s; box-shadow: var(--shadow);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   .w-list.open { transform: none; }
   .only-mobile { display: inline-block; }
   .page-inner { padding: 12px; }
-  #chap-content { font-size: 16px; padding: 12px; }
-  .w-editor-h .hide-mobile { display: none; }
+  /* 正文：大字号、行距舒适、底部留白 + 安全区，最后一行永不被遮挡 */
+  #chap-content {
+    font-size: 16.5px; line-height: 1.95; letter-spacing: 0.01em;
+    padding: 14px 14px calc(26px + env(safe-area-inset-bottom, 0px));
+  }
+  /* 编辑器头部：允许换行，按钮全部可见（两行工具条） */
+  .w-editor-h { flex-wrap: wrap; gap: 6px; }
+  .w-editor-h .btn { padding: 6px 9px; font-size: 12px; min-height: 30px; }
+  .w-editor-h #chap-title { flex: 1 1 auto; min-width: 96px; }
+  /* AI 对话输入区：底部留安全区（面板是底部抽屉） */
+  .chat-in { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .w-ai { padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
+/* 高度：兼容不支持 dvh 的浏览器 */
+#app { height: 100vh; height: 100dvh; }
+#chap-content { overscroll-behavior: contain; }
 @media (min-width: 769px) { .only-mobile { display: none; } }
 /* 抽屉模式下才显示（<1201px 写作页 AI 面板是抽屉，需要打开按钮；桌面三栏常驻不需要） */
 @media (min-width: 1201px) { .only-drawer { display: none; } }
@@ -1377,7 +1394,7 @@ const Writing = {
     const box = $('#chat-box', this.c);
     box.innerHTML = '';
     if (!chat.messages.length) {
-      box.innerHTML = '<div class="empty-tip">和 AI 对话吧：<br>· 点「✨生成」按细纲写下一段<br>· 点「✍️续写」接着写<br>· 选中正文文字 → 让 AI 只改选中部分<br>· 随便聊剧情、设定</div>';
+      box.innerHTML = '<div class="empty-tip">和 AI 对话开始写作：<br>· 直接描述想写的内容，AI 生成后点「采纳插入正文」<br>· 点「✍️续写」接着写<br>· 选中正文文字 → AI 只改选中部分（润色/改写/扩写/精简）<br>· 写完一章点「🧠 章节识别」自动建档人物与势力</div>';
       return;
     }
     for (const m of chat.messages) {
