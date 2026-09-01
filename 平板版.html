@@ -1046,6 +1046,7 @@ const Writing = {
     $('#qc-facts', c).onclick = async () => {
       if (typeof CharOps !== 'undefined' && CharOps.extractFromChapter) {
         try {
+          await this.flushSave();
           const n = await CharOps.extractFromChapter(this.curId);
           toast('识别到 ' + n + ' 条特征，去「人物」页确认采纳', 'ok');
         } catch (e) { toast('提取失败：' + e.message, 'err'); }
@@ -1177,6 +1178,7 @@ const Writing = {
     const ch = await this.getCur();
     if (!ch) return;
     if (!(ch.content || '').trim()) { toast('本章还没有正文', 'err'); return; }
+    await this.flushSave(); // 先保存最新正文再审校
     this.setBusy(true);
     toast('🔍 AI 正在全文审校（逻辑/人设/文风/节奏/AI腔）…', 'info');
     try {
@@ -1211,15 +1213,38 @@ const Writing = {
     this.setBusy(false);
   },
 
+  /* 立即保存当前编辑内容（发消息/识别/审校前调用，保证 AI 读到最新正文） */
+  async flushSave() {
+    if (!this.curId) return;
+    const c = this.c;
+    const ta = $('#chap-content', c);
+    const title = $('#chap-title', c);
+    if (!ta) return;
+    const ch = await this.getCur();
+    if (!ch) return;
+    const patch = {};
+    if (ta.value !== ch.content) patch.content = ta.value;
+    if (title && title.value !== ch.title) patch.title = title.value;
+    if (Object.keys(patch).length) await this.saveCur(patch);
+  },
+
   async buildUserContext() {
     const ctx = await AI.projectContext({ chapterId: this.curId });
+    let body = ctx.text;
+    // 把当前章节正文尾部带给 AI（实时感知用户写了什么）
+    if (ctx.chapter) {
+      const content = ctx.chapter.content || '';
+      body += '\n\n【当前章节正文】《' + (ctx.chapter.title || '未命名') + '》\n' +
+        (content ? '……' + content.slice(-4000) : '（本章还没有正文，从开头写起）');
+    }
     return '你是资深网文写作助手。写作要求：文笔流畅，避免 AI 腔（不堆排比、不每段总结、少用"然而/不禁/仿佛"）。' +
       '人设铁律：所有人物言行必须严格符合其【人物卡】中的性格与说话风格，人设崩塌是严重错误；除非用户明确要求，否则不得改变任何人设。' +
-      '铁律：绝不修改用户已写内容，只在你被要求的范围内输出。\n\n以下是你的项目记忆：\n' + ctx.text;
+      '铁律：绝不修改用户已写内容，只在你被要求的范围内输出。\n\n以下是你的项目记忆与当前正文：\n' + body;
   },
 
   async chatAsk(text, meta = { kind: 'chat' }) {
     if (this.busy) return;
+    await this.flushSave(); // 确保 AI 读到最新正文
     const chat = await dbGet('chat', 'chat') || { id: 'chat', messages: [] };
     chat.messages.push({ role: 'user', content: text, ts: Date.now() });
     await dbPut('chat', chat);
@@ -1256,6 +1281,7 @@ const Writing = {
     const ch = await this.getCur();
     if (!ch) return;
     if (ch.locked) { toast('本章已锁定，请先解锁再识别', 'err'); return; }
+    await this.flushSave(); // 先保存最新正文再识别
     this.setBusy(true);
     toast('🧠 AI 正在识别人物与势力…', 'info');
     try {
