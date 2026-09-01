@@ -80,7 +80,7 @@ nav.bottom { display: none; }
 .empty-tip { color: var(--ink2); text-align: center; padding: 40px 20px; font-size: 13.5px; line-height: 2; }
 
 /* ===== 写作页 ===== */
-.page-writing { flex-direction: row; }
+.page-writing { flex-direction: row; overflow: hidden; }
 .w-list {
   width: 235px; min-width: 235px; border-right: 1px solid var(--line); background: var(--bg2);
   display: flex; flex-direction: column; overflow: hidden;
@@ -244,7 +244,7 @@ nav.bottom { display: none; }
   nav.bottom button.on { color: var(--accent); font-weight: 700; }
   /* 底部空间给到 .page 自身（absolute 定位不受 main padding 影响） */
   main { padding-bottom: 0; }
-  .page { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+  .page { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
   .w-list {
     position: fixed; left: 0; top: 0; bottom: 0; width: min(82vw, 300px); z-index: 80;
     transform: translateX(-105%); transition: transform .25s; box-shadow: var(--shadow);
