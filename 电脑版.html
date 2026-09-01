@@ -1201,10 +1201,10 @@ const Writing = {
 
   /* 🔍 全文审校（融合 Novel-OS 编辑流水线 + novel-writing-framework 去 AI 味） */
   async reviewChapter() {
+    await this.flushSave(); // 先保存最新正文再审校（防止读到防抖中的旧内容）
     const ch = await this.getCur();
     if (!ch) return;
     if (!(ch.content || '').trim()) { toast('本章还没有正文', 'err'); return; }
-    await this.flushSave(); // 先保存最新正文再审校
     this.setBusy(true);
     toast('🔍 AI 正在全文审校（逻辑/人设/文风/节奏/AI腔）…', 'info');
     try {
@@ -1220,16 +1220,38 @@ const Writing = {
         toast('审校通过：未发现明显问题', 'ok');
         return;
       }
-      // 报告面板：逐条审阅，觉得哪条好就点「应用替换」（自动快照可回滚）
+      this.setBusy(false); // AI 识别已完成，面板展示阶段解除 busy，面板内操作（发送到 AI 助手等）可用
+      // 报告面板：可勾选多条，支持「综合修改」或「发送到 AI 助手」；也可单条「用这条替换」
       const body = el('div', {});
+      const collectChecked = () => issues.filter((it, i) => {
+        const cb = body.querySelector('.rv-chk[data-i="' + i + '"]');
+        return cb ? cb.checked : false;
+      });
       const renderIssues = () => {
         body.innerHTML = '';
+        // 操作区（多选采纳 → 综合修改 / 发送到 AI 助手）
+        body.appendChild(el('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap' },
+          el('span', { id: 'review-progress', class: 'muted', style: 'flex:1;min-width:140px' }),
+          el('button', { id: 'rv-combine', class: 'btn small primary', text: '🤖 综合修改已采纳', onclick: async () => {
+            const picked = collectChecked();
+            if (!picked.length) { toast('请先勾选要采纳的建议', 'err'); return; }
+            await this.combineAccepted(picked);
+          } }),
+          el('button', { id: 'rv-send', class: 'btn small', text: '📤 发送到 AI 助手', onclick: async () => {
+            const picked = collectChecked();
+            if (!picked.length) { toast('请先勾选要采纳的建议', 'err'); return; }
+            await this.sendAcceptedToAI(picked);
+          } })
+        ));
         let canApply = 0;
-        for (const it of issues) {
+        issues.forEach((it, idx) => {
           if (it.replacement && it.replacement.trim()) canApply++;
           body.appendChild(el('div', { class: 'issue ' + (it.dimension === 'AI腔' ? 'low' : 'med') },
             el('div', { style: 'display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap' },
-              el('b', { text: '[' + (it.dimension || '问题') + ']' + (it.applied ? ' ✅已替换' : '') }),
+              el('div', { style: 'display:flex;gap:8px;align-items:center' },
+                el('input', { type: 'checkbox', class: 'rv-chk', 'data-i': idx, style: 'width:18px;height:18px;accent-color:var(--accent)', onchange: () => updateBar() }),
+                el('b', { text: '[' + (it.dimension || '问题') + ']' + (it.applied ? ' ✅已替换' : '') })
+              ),
               el('div', { style: 'display:flex;gap:6px' },
                 it.replacement && it.replacement.trim() && !it.applied ? el('button', { class: 'btn small primary', text: '✅ 用这条替换', onclick: async (e) => {
                   const ok2 = await this.applyReplacement(it);
@@ -1243,11 +1265,18 @@ const Writing = {
             el('div', { style: 'margin-top:6px;font-size:14px;line-height:1.7', text: it.analysis }),
             it.suggestion ? el('div', { class: 'muted', style: 'margin-top:6px', text: '建议：' + it.suggestion }) : null
           ));
-        }
-        const bar = $('#review-progress');
-        if (bar) bar.textContent = canApply ? `💡 ${canApply} 条带替换方案，看中哪条点「用这条替换」（自动存档，可↩撤销）` : '以上为建议，可手动修改';
+        });
+        updateBar();
       };
-      body.appendChild(el('div', { id: 'review-progress', class: 'muted', style: 'margin-bottom:6px' }));
+      const updateBar = () => {
+        const n = collectChecked().length;
+        const bar = body.querySelector('#review-progress');
+        if (bar) bar.textContent = n > 0 ? `☑ 已采纳 ${n} 条 → 可「🤖 综合修改」或「📤 发送到 AI 助手」` : (canApplyTotal() ? '💡 可勾选多条后「综合修改」，或单条点「用这条替换」（自动存档可撤销）' : '以上为建议，可勾选后「发送到 AI 助手」讨论');
+        const b1 = body.querySelector('#rv-combine'), b2 = body.querySelector('#rv-send');
+        if (b1) b1.disabled = n === 0;
+        if (b2) b2.disabled = n === 0;
+      };
+      let canApplyTotal = () => issues.filter(i => i.replacement && i.replacement.trim()).length;
       renderIssues();
       await modal({ title: '🔍 全文审校 · 《' + ch.title + '》', body, okText: '关闭', cancelable: false });
       await logAdd('审校', '《' + ch.title + '》审校完成，' + issues.length + ' 条建议' + (issues.filter(i => i.applied).length ? '，应用替换 ' + issues.filter(i => i.applied).length + ' 处' : ''));
@@ -1255,6 +1284,64 @@ const Writing = {
       toast('审校失败：' + e.message, 'err');
     }
     this.setBusy(false);
+  },
+
+  /* 🤖 综合修改已采纳：AI 汇总勾选建议 → 输出最终替换对 → 预览逐条确认应用 */
+  async combineAccepted(picked) {
+    this.setBusy(true);
+    toast('🤖 AI 正在综合修改建议…', 'info');
+    try {
+      const ch = await this.getCur();
+      if (!ch) return;
+      const ctx = await AI.projectContext({ chapterId: ch.id });
+      const advice = picked.map((it, i) => `${i + 1}. [${it.dimension || '问题'}] 原文「${it.quote || ''}」 分析：${it.analysis || ''}${it.suggestion ? ' 建议：' + it.suggestion : ''}${it.replacement ? ' 参考替换：「' + it.replacement + '」' : ''}`).join('\n');
+      const data = await AI.json([
+        { role: 'system', content: '你是资深网文修改编辑。根据用户采纳的多条审校建议，综合当前章节上下文，给出最终的修改替换对。要求：quote 必须逐字摘自原文（选正文中唯一片段，20~50字）；replacement 为修改后的新文本；同一处多条建议合并成一条；替换后全文通顺、符合人设与文风。只输出 JSON。\n' + ctx.text },
+        { role: 'user', content: '章节《' + ch.title + '》末尾：\n……' + (ch.content || '').slice(-2500) + '\n\n采纳的建议：\n' + advice + '\n输出：{"replacements":[{"quote":"原文逐字","replacement":"新文本"}]}' }
+      ]);
+      const reps = (data.replacements || []).filter(r => r && r.quote && r.replacement);
+      if (!reps.length) { toast('AI 未给出可应用的修改', 'err'); return; }
+      await this.showCombinePreview(reps);
+    } catch (e) {
+      toast('综合修改失败：' + e.message, 'err');
+    }
+    this.setBusy(false);
+  },
+
+  /* 综合修改预览：逐条确认应用（快照可回滚） */
+  async showCombinePreview(reps) {
+    const body = el('div', {});
+    let done = 0;
+    const render = () => {
+      body.innerHTML = '';
+      reps.forEach((r, idx) => {
+        if (r.applied) return;
+        body.appendChild(el('div', { class: 'issue med' },
+          el('div', { class: 'q', text: '原文：' + r.quote }),
+          el('div', { class: 'q', style: 'border-left-color:#5aa469', text: '替换为：' + r.replacement }),
+          el('div', { style: 'display:flex;gap:6px;margin-top:8px' },
+            el('button', { class: 'btn small primary', text: '✅ 应用这条', onclick: async (e) => {
+              const ok2 = await this.applyReplacement(r);
+              if (ok2) { r.applied = true; done++; render(); }
+            } }),
+            el('button', { class: 'btn small danger', text: '✗ 跳过', onclick: (e) => { r.applied = true; done++; render(); } })
+          )
+        ));
+      });
+      const bar = $('#cmp-progress');
+      if (bar) bar.textContent = done >= reps.length ? '✅ 已全部处理' : `剩余 ${reps.length - done} 条（点「应用这条」生效，可↩撤销）`;
+    };
+    body.appendChild(el('div', { id: 'cmp-progress', class: 'muted', style: 'margin-bottom:6px' }));
+    render();
+    await modal({ title: '🤖 综合修改预览（逐条确认）', body, okText: '关闭', cancelable: false });
+    if (done) await logAdd('审校', '综合修改应用 ' + done + ' 处');
+  },
+
+  /* 📤 发送到 AI 助手：把采纳的建议汇总成消息发到对话，继续沟通修改 */
+  async sendAcceptedToAI(picked) {
+    const text = '（全文审校采纳）以下是我从审校中采纳的建议，请帮我逐条落实修改，可以综合优化，改完给出可直接插入的文本：\n' +
+      picked.map((it, i) => `${i + 1}. [${it.dimension || '问题'}] 原文：${it.quote || ''}；分析：${it.analysis || ''}${it.suggestion ? '；建议：' + it.suggestion : ''}${it.replacement ? '；参考替换：' + it.replacement : ''}`).join('\n');
+    await this.chatAsk(text, { kind: 'chat', label: '审校修改' });
   },
 
   /* 应用单条替换（用户看中哪条用哪条）：快照 → 定位原文 → 替换 */
