@@ -1,19 +1,8 @@
-/* 小说创作工作台 Service Worker：离线缓存 + 版本管理 */
-const CACHE = 'novel-workbench-v1';
-const ASSETS = [
-  './',
-  './手机版.html',
-  './平板版.html',
-  './电脑版.html',
-  './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png'
-];
+/* 小说创作工作台 Service Worker：网络优先（在线自动更新）+ 离线兜底缓存 */
+const CACHE = 'novel-workbench-v2';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting())
-  );
+  e.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (e) => {
@@ -29,13 +18,14 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return; // AI 请求不缓存
   e.respondWith(
-    caches.match(e.request).then((hit) => {
-      if (hit) return hit;
-      return fetch(e.request).then((res) => {
+    // 网络优先：在线时永远拿最新版；断网/失败时回退缓存
+    fetch(e.request)
+      .then((res) => {
         const cp = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, cp)).catch(() => {});
         return res;
-      }).catch(() => hit);
-    })
+      })
+      .catch(() => caches.match(e.request).then((hit) => hit || caches.match('./手机版.html')))
   );
 });
+
