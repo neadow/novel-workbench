@@ -611,7 +611,7 @@ const AI = {
     throw new Error('图像接口返回格式无法识别');
   },
 
-  /* 构建项目上下文（世界观 + 人物卡 + 指定章节），供写作与检测使用 */
+  /* 构建项目上下文（检索式：当前章节相关人物优先 + 全量名单，支撑超长篇规模） */
   async projectContext({ chapterId } = {}) {
     const world = await dbGet('world', 'world');
     const chars = await dbAll('characters');
@@ -625,9 +625,24 @@ const AI = {
       }
     } else lines.push('（暂无）');
     lines.push('');
-    lines.push('【人物卡】');
-    if (chars.length) {
-      for (const ch of chars.slice(0, 15)) {
+    let chapter = null;
+    if (chapterId) chapter = await dbGet('chapters', chapterId);
+    // 检索式人物携带：当前章节出现次数多的优先，上限 50；其余给全量名单
+    const chapterText = chapter ? ((chapter.content || '') + (chapter.title || '')) : '';
+    const scored = chars.map(c => {
+      let score = 0;
+      if (chapterText) {
+        let idx = 0;
+        while ((idx = chapterText.indexOf(c.name, idx)) !== -1) { score++; idx += c.name.length; }
+      }
+      return { c, score };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    const top = scored.slice(0, 50).map(x => x.c);
+    const restNames = scored.slice(50).map(x => x.c.name);
+    lines.push('【人物卡】（当前章节相关优先，最多 50 位；未列出的见名单）');
+    if (top.length) {
+      for (const ch of top) {
         const facts = (ch.facts || []).filter(f => f.confirmed).map(f => f.text).join('；');
         const rels = (ch.relations || []).map(r => `与${r.targetName || '?'}(${r.type})`).join('，');
         const persona = [ch.personality ? '性格：' + ch.personality : '', ch.speechStyle ? '说话风格：' + ch.speechStyle : ''].filter(Boolean).join('，');
@@ -636,8 +651,12 @@ const AI = {
         lines.push(`- ${ch.name}：${ch.bio || '(无简介)'}${persona ? ' | ' + persona : ''}${skills ? ' | 功法技能：' + skills : ''}${faction ? ' | ' + faction : ''}${facts ? ' | 特征：' + facts : ''}${rels ? ' | 关系：' + rels : ''}`);
       }
     } else lines.push('（暂无）');
-    let chapter = null;
-    if (chapterId) chapter = await dbGet('chapters', chapterId);
+    if (restNames.length) lines.push('【其余已有人物名单】' + restNames.join('、'));
+    if (sectTree.nodes.length) {
+      lines.push('');
+      lines.push('【势力组织】');
+      for (const n of sectTree.nodes) lines.push(`- ${n.name}${n.role ? '（' + n.role + '）' : ''}${n.note ? '：' + n.note : ''}`);
+    }
     return { text: lines.join('\n'), chapter };
   },
 
@@ -884,6 +903,7 @@ const Writing = {
     c.innerHTML = `
       <div class="w-list">
         <div class="w-list-h">
+          <button id="btn-onboard" class="btn small" title="新书写书：问卷 → AI 生成书名/卖点/世界观/人设/章节骨架">🚀 立项</button>
           <button id="new-chapter" class="btn primary small">＋ 新章节</button>
           <div class="spacer"></div>
           <button id="toggle-list" class="btn small only-mobile">✕</button>
@@ -897,6 +917,7 @@ const Writing = {
           <input id="chap-title" class="input" placeholder="章节标题">
           <span id="chap-count" class="count"></span>
           <button id="btn-lock" class="btn small hide-mobile" title="锁定/解锁本章">🔒</button>
+          <button id="btn-review" class="btn small hide-mobile" title="AI 全文审校：逻辑/人设/文风/节奏/AI腔">🔍 审校</button>
           <button id="btn-analyze" class="btn small" title="章节写完后：AI 识别人物/势力/关系，确认后自动更新设定">🧠 章节识别</button>
           <button id="btn-undo" class="btn small hide-mobile" title="撤销最近一次 AI 改动">↩ 撤销</button>
           <button id="btn-copy" class="btn small">📋 复制</button>
@@ -955,6 +976,8 @@ const Writing = {
 
   bind() {
     const c = this.c;
+    $('#btn-onboard', c).onclick = () => Onboarding.start();
+    $('#btn-review', c).onclick = () => this.reviewChapter();
     $('#new-chapter', c).onclick = async () => {
       const title = await promptDlg('新章节', '第' + ((await dbAll('chapters')).length + 1) + '章', '章节标题');
       if (!title) return;
@@ -1129,7 +1152,46 @@ const Writing = {
   setBusy(b) {
     this.busy = b;
     const c = this.c;
-    $('#qc-cont', c).disabled = b; $('#chat-send', c).disabled = b; $('#btn-analyze', c).disabled = b;
+    $('#qc-cont', c).disabled = b; $('#chat-send', c).disabled = b; $('#btn-analyze', c).disabled = b; $('#btn-review', c).disabled = b;
+  },
+
+  /* 🔍 全文审校（融合 Novel-OS 编辑流水线 + novel-writing-framework 去 AI 味） */
+  async reviewChapter() {
+    const ch = await this.getCur();
+    if (!ch) return;
+    if (!(ch.content || '').trim()) { toast('本章还没有正文', 'err'); return; }
+    this.setBusy(true);
+    toast('🔍 AI 正在全文审校（逻辑/人设/文风/节奏/AI腔）…', 'info');
+    try {
+      const ctx = await AI.projectContext({ chapterId: ch.id });
+      const data = await AI.json([
+        { role: 'system', content: '你是资深网文审校编辑。对章节做多维度审查：1)逻辑漏洞（前后矛盾、因果断裂）2)人设崩塌（言行不符性格/说话风格）3)文风一致性 4)节奏问题（拖沓/过急）5)AI腔（排比堆砌、每段总结、滥用"然而/不禁/仿佛/顿时"）。只报告，绝不修改。\n' + ctx.text },
+        { role: 'user', content: '章节《' + ch.title + '》：\n"""\n' + ch.content.slice(0, 12000) + '\n"""\n输出：{"issues":[{"dimension":"逻辑|人设|文风|节奏|AI腔","quote":"原文摘录(20字内)","analysis":"问题分析","suggestion":"修改建议"}]}，没有就输出 {"issues":[]}。' }
+      ]);
+      const issues = (data.issues || []).filter(i => i && i.analysis);
+      if (!issues.length) {
+        await logAdd('审校', '《' + ch.title + '》审校通过，无问题');
+        toast('审校通过：未发现明显问题', 'ok');
+        return;
+      }
+      const body = el('div', {});
+      for (const it of issues) {
+        body.appendChild(el('div', { class: 'issue ' + (it.dimension === 'AI腔' ? 'low' : 'med') },
+          el('div', { style: 'display:flex;gap:8px;align-items:center;justify-content:space-between' },
+            el('b', { text: '[' + (it.dimension || '问题') + ']' }),
+            el('button', { class: 'btn small danger', text: '✗ 忽略', onclick: (e) => { e.target.closest('.issue').remove(); } })
+          ),
+          it.quote ? el('div', { class: 'q', text: '原文：' + it.quote }) : null,
+          el('div', { style: 'margin-top:6px;font-size:14px;line-height:1.7', text: it.analysis }),
+          it.suggestion ? el('div', { class: 'muted', style: 'margin-top:6px', text: '建议：' + it.suggestion }) : null
+        ));
+      }
+      await modal({ title: '🔍 全文审校 · 《' + ch.title + '》', body, okText: '关闭', cancelable: false });
+      await logAdd('审校', '《' + ch.title + '》审校完成，' + issues.length + ' 条建议');
+    } catch (e) {
+      toast('审校失败：' + e.message, 'err');
+    }
+    this.setBusy(false);
   },
 
   async buildUserContext() {
@@ -1274,6 +1336,7 @@ const Writing = {
     ].filter(p => p[1] > 0).map(p => p[0] + ' ' + p[1]).join(' · ');
     await logAdd('检测', '章节识别完成（《' + ch.title + '》' + (parts ? '：采纳 ' + parts : '，无采纳') + '）');
     toast(parts ? '已更新：' + parts : '未采纳任何条目', parts ? 'ok' : 'info');
+    if (parts) toast('💡 建议：去「检测」页跑一次一致性检查，确认本章设定无误', 'info');
   },
 
   /* 选区操作：AI 只处理选中的文字 */
@@ -1377,6 +1440,195 @@ const Writing = {
 PageMods.writing = Writing;
 
 ;
+;/* ==== onboarding.js ==== */
+'use strict';
+/* ===== 开书立项向导（融合 WinkNovel 问卷立项 + AINovel 灵感起步 + Novel-OS 大纲规划） ===== */
+
+const Onboarding = {
+  async start() {
+    // 1. 问卷表单
+    const rows = [
+      ['题材', 'bg-topic', '如：都市异能 / 修仙家族 / 科幻末世 / 悬疑刑侦', ''],
+      ['风格', 'bg-style', '如：轻松搞笑 / 热血爽文 / 悬疑烧脑 / 温馨治愈', ''],
+      ['主角', 'bg-hero', '主角名 + 一句话人设（可留空让 AI 设计）', ''],
+      ['金手指', 'bg-power', '主角的特殊能力/系统/机缘（可留空让 AI 设计）', ''],
+      ['世界观一句话', 'bg-world', '如：灵气复苏后的现代都市 / 家族传承的修仙界', ''],
+      ['目标', 'bg-goal', '目标平台与字数，如：番茄 500 万字长篇', '500万字长篇']
+    ];
+    const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' });
+    const inputs = {};
+    for (const [label, id, ph, def] of rows) {
+      body.appendChild(el('div', {},
+        el('div', { class: 'muted', text: label }),
+        el('input', { id, class: 'input', style: 'width:100%', placeholder: ph, value: def })
+      ));
+      inputs[id] = true;
+    }
+    const ok = await modal({ title: '🚀 开书立项 · 问卷', body, okText: '🤖 生成立项方案', cancelText: '取消', cancelable: true });
+    if (!ok) return null;
+    const q = {
+      topic: $('#bg-topic', body).value.trim(),
+      style: $('#bg-style', body).value.trim(),
+      hero: $('#bg-hero', body).value.trim(),
+      power: $('#bg-power', body).value.trim(),
+      world: $('#bg-world', body).value.trim(),
+      goal: $('#bg-goal', body).value.trim()
+    };
+    if (!q.topic && !q.world && !q.hero) { toast('至少填一项（题材/世界观/主角），或给一句灵感也行', 'err'); return null; }
+    toast('🤖 AI 正在策划立项方案（书名/卖点/世界观/人设/章节骨架）…', 'info');
+    try {
+      const sys = '你是资深网文开书立项策划，深谙男频/女频爽文套路与平台规则。根据问卷输出一套完整的开书方案。' +
+        '要求：1) 有黄金三章意识（前三章钩子密集、冲突前置）；2) 贴合目标平台与字数规划（如番茄长篇要主线+支线+升级体系清晰）；3) 金手指要有限制与成长空间；4) 世界观设定互相自洽。\n' +
+        '只输出 JSON，不要任何其他文字。';
+      const user = '问卷：题材「' + q.topic + '」、风格「' + q.style + '」、主角「' + q.hero + '」、金手指「' + q.power + '」、世界观「' + q.world + '」、目标「' + q.goal + '」。\n' +
+        '输出JSON：' +
+        '{"title":"书名","hook":"一句话卖点/开篇钩子","worldItems":[{"category":"境界体系|势力格局|金手指|时间线|地理|其他","title":"设定名","content":"设定内容"}],' +
+        '"characters":[{"name":"姓名","bio":"简介","personality":"性格","speechStyle":"说话风格","skills":[{"name":"技能名","desc":"描述"}]}],' +
+        '"chapters":[{"title":"第1章 XXX","points":"本章要点（2~3句）"}]}\n' +
+        'worldItems 3~6 条，characters 2~4 个（含主角），chapters 10~15 章（含黄金三章）。';
+      const data = await AI.json([{ role: 'system', content: sys }, { role: 'user', content: user }]);
+      if (!data.title && !(data.worldItems || []).length && !(data.chapters || []).length) {
+        throw new Error('AI 返回的立项方案为空');
+      }
+      await this.showPanel(data);
+      return data;
+    } catch (e) {
+      toast('立项失败：' + e.message, 'err');
+      return null;
+    }
+  },
+
+  /* 立项方案确认面板：逐条采纳/忽略/修改，采纳后写入设定、人物、章节骨架 */
+  async showPanel(data) {
+    const sections = [
+      { key: 'info', icon: '📖', title: '书名与卖点' },
+      { key: 'worldItems', icon: '🌍', title: '世界观设定' },
+      { key: 'characters', icon: '👥', title: '人物' },
+      { key: 'chapters', icon: '📚', title: '章节骨架' }
+    ];
+    // info 是对象 → 转成数组便于统一处理
+    const infoItem = { title: data.title || '（未命名）', hook: data.hook || '', source: data };
+    const pending = {
+      info: [infoItem],
+      worldItems: Array.isArray(data.worldItems) ? data.worldItems.slice() : [],
+      characters: Array.isArray(data.characters) ? data.characters.slice() : [],
+      chapters: Array.isArray(data.chapters) ? data.chapters.slice() : []
+    };
+    const total = sections.reduce((n, s) => n + pending[s.key].length, 0);
+    const stats = { info: 0, worldItems: 0, characters: 0, chapters: 0 };
+    let done = 0;
+    const body = el('div', {});
+    const descOf = (s, item) => {
+      if (s === 'info') return `《${item.title}》${item.hook ? ' — ' + item.hook : ''}`;
+      if (s === 'worldItems') return `[${item.category || '设定'}] ${item.title}：${(item.content || '').slice(0, 60)}`;
+      if (s === 'characters') return `${item.name}${item.personality ? '（' + item.personality + '）' : ''}${(item.skills || []).length ? ' · ' + item.skills.map(x => x.name).join('、') : ''}`;
+      return `${item.title}：${(item.points || '').slice(0, 40)}`;
+    };
+    const renderList = () => {
+      body.innerHTML = '';
+      let left = 0;
+      for (const s of sections) {
+        const items = pending[s.key];
+        if (!items.length) continue;
+        left += items.length;
+        body.appendChild(el('div', { style: 'font-weight:700;margin:12px 0 6px', text: s.icon + ' ' + s.title + '（' + items.length + ' 条）' }));
+        for (const item of items) {
+          const row = el('div', { style: 'display:flex;gap:8px;align-items:center;padding:7px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;flex-wrap:wrap;background:var(--bg)' },
+            el('span', { text: descOf(s.key, item), style: 'flex:1;min-width:150px;font-size:13.5px;line-height:1.6' }),
+            el('button', { class: 'btn small primary', text: '✅ 采纳', onclick: async () => {
+              const ok2 = await this.applyItem(s.key, item);
+              if (!ok2) { toast('采纳失败，请重试', 'err'); return; }
+              pending[s.key] = pending[s.key].filter(x => x !== item);
+              done++; stats[s.key]++;
+              renderList();
+            } }),
+            el('button', { class: 'btn small', text: '✗ 忽略', onclick: async () => {
+              pending[s.key] = pending[s.key].filter(x => x !== item);
+              done++;
+              renderList();
+            } }),
+            el('button', { class: 'btn small', text: '✏️ 修改', onclick: async () => {
+              const field = s.key === 'chapters' ? '章节标题' : s.key === 'worldItems' ? '设定标题' : s.key === 'characters' ? '姓名' : '书名';
+              const cur = s.key === 'chapters' ? item.title : s.key === 'worldItems' ? item.title : s.key === 'characters' ? item.name : item.title;
+              const v = await promptDlg('修改' + field, cur);
+              if (v) {
+                if (s.key === 'chapters') item.title = v;
+                else if (s.key === 'worldItems') item.title = v;
+                else if (s.key === 'characters') item.name = v;
+                else item.title = v;
+                renderList();
+              }
+            } })
+          );
+          body.appendChild(row);
+        }
+      }
+      const bar = $('#onb-progress');
+      if (bar) bar.textContent = left ? `⏳ 剩余 ${left} 条（采纳后写入设定/人物/章节）` : '✅ 全部处理完毕，可关闭';
+    };
+    body.appendChild(el('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px' },
+      el('span', { id: 'onb-progress', class: 'muted' }),
+      el('button', { class: 'btn small danger', text: '全部忽略', onclick: async () => {
+        if (!(await confirmDlg('忽略本次立项的全部 ' + (total - done) + ' 条？'))) return;
+        for (const s of sections) pending[s.key] = [];
+        done = total;
+        renderList();
+      } })
+    ));
+    renderList();
+    await modal({ title: '📖 立项方案确认', body, okText: '✔ 完成', cancelText: '关闭', cancelable: true });
+    const parts = [['书名', stats.info], ['设定', stats.worldItems], ['人物', stats.characters], ['章节', stats.chapters]]
+      .filter(p => p[1] > 0).map(p => p[0] + ' ' + p[1]).join(' · ');
+    await logAdd('立项', '开书立项' + (parts ? '：采纳 ' + parts : '，无采纳'));
+    toast(parts ? '立项完成：' + parts : '未采纳任何内容', parts ? 'ok' : 'info');
+    if (stats.info > 0 || stats.worldItems > 0 || stats.characters > 0 || stats.chapters > 0) {
+      if (typeof Writing !== 'undefined' && Writing.refreshList) await Writing.refreshList();
+    }
+  },
+
+  /* 执行单条采纳 */
+  async applyItem(kind, item) {
+    try {
+      if (kind === 'info') {
+        const rec = await dbGet('world', 'world') || { id: 'world', items: [] };
+        if (!rec.items.some(x => x.category === '书籍' && x.title === item.title)) {
+          rec.items.push({ id: uid(), category: '书籍', title: item.title || '书名', content: item.hook || '', updatedAt: Date.now() });
+          await dbPut('world', rec);
+          await logAdd('立项', '采纳书名《' + item.title + '》' + (item.hook ? '，卖点：' + item.hook : ''));
+        }
+        return true;
+      }
+      if (kind === 'worldItems') {
+        const rec = await dbGet('world', 'world') || { id: 'world', items: [] };
+        if (!rec.items.some(x => x.title === item.title)) {
+          rec.items.push({ id: uid(), category: item.category || '其他', title: item.title || '未命名', content: item.content || '', updatedAt: Date.now() });
+          await dbPut('world', rec);
+          await logAdd('立项', '采纳设定「' + item.title + '」');
+        }
+        return true;
+      }
+      if (kind === 'characters') {
+        return await CharOps.applyItem('people', item);
+      }
+      if (kind === 'chapters') {
+        const ch = {
+          id: uid(), title: item.title || ('第' + ((await dbAll('chapters')).length + 1) + '章'),
+          outline: item.points ? [{ id: uid(), text: item.points, done: false }] : [],
+          content: '', locked: false, snapshots: [], createdAt: Date.now(), updatedAt: Date.now()
+        };
+        await dbPut('chapters', ch);
+        await logAdd('立项', '采纳章节骨架「' + ch.title + '」');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      toast('执行失败：' + e.message, 'err');
+      return false;
+    }
+  }
+};
+
+;
 ;/* ==== characters.js ==== */
 'use strict';
 /* ===== 人物页：卡片 / 详情 / AI 特征待确认 / 关系图 ===== */
@@ -1420,6 +1672,7 @@ const CharOps = {
     const knownFactions = tree.nodes.map(n => n.name);
     const sys = '你是小说设定整理助手。阅读章节正文，识别：【新人物】、【新势力】、【人物归属】、【人物关系】、【已有人物的新信息】。\n' +
       '规则：只输出正文明确写到的；不要臆测；不要与已知设定矛盾。\n' +
+      '铁律：凡与【已知人物/势力名单】同名或明显同一人（含简称、别名、"姓+职位"写法）的，一律视为同一人，绝不重复创建；已有人物只放进 updates/memberships/relations，不放进 people。\n' +
       '已知人物：' + (knownPeople.join('、') || '（无）') + '\n已知势力：' + (knownFactions.join('、') || '（无）') + '\n\n' + ctx.text;
     const user = '章节《' + ch.title + '》正文：\n"""\n' + ch.content.slice(0, 12000) + '\n"""\n' +
       '输出JSON：\n' +
