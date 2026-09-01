@@ -1246,11 +1246,15 @@ const Writing = {
     if (this.busy) return;
     await this.flushSave(); // 确保 AI 读到最新正文
     const chat = await dbGet('chat', 'chat') || { id: 'chat', messages: [] };
-    chat.messages.push({ role: 'user', content: text, ts: Date.now() });
-    await dbPut('chat', chat);
+    const silent = !!meta.silentUser; // 换一版等：不重复显示用户消息
+    if (!silent) {
+      chat.messages.push({ role: 'user', content: text, ts: Date.now() });
+      await dbPut('chat', chat);
+    }
     this.renderChat();
     const sys = await this.buildUserContext();
     const hist = chat.messages.slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+    if (silent) hist.push({ role: 'user', content: text }); // 本次指令作为最新输入
     this.setBusy(true);
     try {
       const reply = await AI.chat([{ role: 'system', content: sys }, ...hist]);
@@ -1264,6 +1268,13 @@ const Writing = {
     }
     this.setBusy(false);
     this.renderChat();
+  },
+
+  /* 🔄 换一版：静默重发原要求，明确要求生成不同版本（不重复显示用户消息） */
+  async regenerate(meta) {
+    const req = meta.reqText || '';
+    const text = '（换一版）请基于刚才同一个要求，重新生成一版新的内容：角度、表达、细节与上一版明显不同，风格一致且符合人设；不要复述我的要求，直接输出新内容。\n原要求：' + req;
+    await this.chatAsk(text, { ...meta, silentUser: true, label: '换一版' });
   },
 
   /* 续写（不选中任何内容时，AI 只能在文末续写） */
@@ -1430,12 +1441,9 @@ const Writing = {
       if (m.role === 'assistant' && !meta.err && meta.kind !== 'ooc') {
         div.appendChild(el('div', { class: 'acts' },
           el('button', { class: 'btn small primary', text: meta.kind === 'sel' ? '✅ 替换选中部分' : '✅ 采纳插入正文', onclick: () => this.applyReply(m) }),
-          el('button', { class: 'btn small', text: '🔄 换一版', onclick: async () => {
-            const req = meta.reqText;
-            await this.chatAsk(req, meta);
-          } }),
+          el('button', { class: 'btn small', text: '🔄 换一版', onclick: () => this.regenerate(meta) }),
           el('button', { class: 'btn small', text: '👉 继续写', onclick: async () => {
-            await this.chatAsk('接着你刚写的这段继续写下去，300~500 字，风格保持一致。', { kind: 'cont', label: '继续写' });
+            await this.chatAsk('（继续写）接着你刚写的这段内容继续往下写，300~500 字，延续剧情、视角与文风，不要重复已写句子。', { kind: 'cont', label: '继续写' });
           } })
         ));
       }
