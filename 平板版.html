@@ -635,6 +635,15 @@ const AI = {
     const sectTree = (await dbGet('sect', 'tree')) || { nodes: [] };
     const nodeName = (id) => { const n = sectTree.nodes.find(x => x.id === id); return n ? n.name : null; };
     const lines = [];
+    // 文风要求（设置页配置：风格描述/避免词/范文）
+    const prefs = Prefs.get();
+    if (prefs.styleDesc || prefs.styleSample || prefs.avoidWords) {
+      lines.push('【文风要求（严格遵守）】');
+      if (prefs.styleDesc) lines.push('- 风格：' + prefs.styleDesc);
+      if (prefs.avoidWords) lines.push('- 尽量避免使用：' + prefs.avoidWords);
+      if (prefs.styleSample) lines.push('- 范文（模仿其语感与节奏）：\n"""\n' + prefs.styleSample.slice(0, 600) + '\n"""');
+      lines.push('');
+    }
     lines.push('【世界观设定】');
     if (world && world.items.length) {
       for (const it of world.items) {
@@ -790,6 +799,15 @@ PageMods.settings = {
           <div id="cfg-result" class="hint" style="margin-top:10px"></div>
         </div>
         <div class="card settings-form">
+          <h4>✍️ 文风配置（提升 AI 文笔，全局生效）</h4>
+          <div class="row"><label>文风描述</label>
+            <textarea id="cfg-style" class="input" style="min-height:50px" placeholder="如：轻松幽默带点俏皮 / 热血大气节奏快 / 细腻情感向 / 类似某作者风格"></textarea></div>
+          <div class="row"><label>范文（选一段你满意的文字，AI 写作时模仿其语感）</label>
+            <textarea id="cfg-sample" class="input" style="min-height:90px" placeholder="粘贴一段你认可的文段…"></textarea></div>
+          <div class="row"><label>尽量避免的词（逗号分隔，如：然而, 不禁, 仿佛, 瞬间）</label>
+            <input id="cfg-avoid" class="input" placeholder="然而, 不禁, 仿佛, 顿时"></div>
+        </div>
+        <div class="card settings-form">
           <h4>📦 数据管理</h4>
           <div class="hint" style="margin-bottom:10px">所有数据（章节、人物、设定、地图、对话、日志）保存在本机浏览器数据库中，不会上传。跨设备迁移请用导出/导入。</div>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -826,6 +844,9 @@ PageMods.settings = {
     $('#cfg-imgbase').value = cfg.imgBaseURL || '';
     $('#cfg-imgkey').value = cfg.imgApiKey || '';
     $('#cfg-imgmodel').value = cfg.imgModel || '';
+    $('#cfg-style').value = cfg.styleDesc || '';
+    $('#cfg-sample').value = cfg.styleSample || '';
+    $('#cfg-avoid').value = cfg.avoidWords || '';
     // 保存
     $('#cfg-save').onclick = () => {
       Prefs.set({
@@ -836,10 +857,13 @@ PageMods.settings = {
         proxyMode: $('#cfg-proxy').checked,
         imgBaseURL: $('#cfg-imgbase').value.trim(),
         imgApiKey: $('#cfg-imgkey').value.trim(),
-        imgModel: $('#cfg-imgmodel').value.trim()
+        imgModel: $('#cfg-imgmodel').value.trim(),
+        styleDesc: $('#cfg-style').value.trim(),
+        styleSample: $('#cfg-sample').value.trim(),
+        avoidWords: $('#cfg-avoid').value.trim()
       });
       toast('配置已保存', 'ok');
-      logAdd('设置', '更新 AI 配置');
+      logAdd('设置', '更新 AI 配置与文风');
     };
     // 测试连接
     $('#cfg-test').onclick = async () => {
@@ -961,6 +985,7 @@ const Writing = {
           <button id="toggle-ai" class="btn small">✕</button>
         </div>
         <div class="chat-quick">
+          <button id="qc-ideas" class="btn small">💡灵感</button>
           <button id="qc-cont" class="btn small">✍️续写</button>
           <button id="qc-facts" class="btn small">📋提取特征</button>
           <button id="qc-clear" class="btn small">🗑清空对话</button>
@@ -1037,6 +1062,7 @@ const Writing = {
 
     // AI 续写 / 清空对话 / 提取特征
     $('#qc-cont', c).onclick = () => this.continueWrite();
+    $('#qc-ideas', c).onclick = () => this.getIdeas();
     $('#qc-clear', c).onclick = async () => {
       if (!(await confirmDlg('清空与 AI 的对话记录？（不影响正文）'))) return;
       await dbPut('chat', { id: 'chat', messages: [] });
@@ -1170,7 +1196,7 @@ const Writing = {
   setBusy(b) {
     this.busy = b;
     const c = this.c;
-    $('#qc-cont', c).disabled = b; $('#chat-send', c).disabled = b; $('#btn-analyze', c).disabled = b; $('#btn-review', c).disabled = b;
+    $('#qc-cont', c).disabled = b; $('#chat-send', c).disabled = b; $('#btn-analyze', c).disabled = b; $('#btn-review', c).disabled = b; $('#qc-ideas', c).disabled = b;
   },
 
   /* 🔍 全文审校（融合 Novel-OS 编辑流水线 + novel-writing-framework 去 AI 味） */
@@ -1184,8 +1210,9 @@ const Writing = {
     try {
       const ctx = await AI.projectContext({ chapterId: ch.id });
       const data = await AI.json([
-        { role: 'system', content: '你是资深网文审校编辑。对章节做多维度审查：1)逻辑漏洞（前后矛盾、因果断裂）2)人设崩塌（言行不符性格/说话风格）3)文风一致性 4)节奏问题（拖沓/过急）5)AI腔（排比堆砌、每段总结、滥用"然而/不禁/仿佛/顿时"）。只报告，绝不修改。\n' + ctx.text },
-        { role: 'user', content: '章节《' + ch.title + '》：\n"""\n' + ch.content.slice(0, 12000) + '\n"""\n输出：{"issues":[{"dimension":"逻辑|人设|文风|节奏|AI腔","quote":"原文摘录(20字内)","analysis":"问题分析","suggestion":"修改建议"}]}，没有就输出 {"issues":[]}。' }
+        { role: 'system', content: '你是资深网文审校编辑。对章节做多维度审查：1)逻辑漏洞（前后矛盾、因果断裂）2)人设崩塌（言行不符性格/说话风格）3)文风一致性 4)节奏问题（拖沓/过急）5)AI腔（排比堆砌、每段总结、滥用"然而/不禁/仿佛/顿时"）。' +
+          '规则：只报告、给建议；quote 必须逐字摘自原文（20~40字、选正文中唯一的一段，便于程序定位）；若该处值得直接修改，给出 replacement（用于替换 quote 的完整新文本，替换后上下文通顺）；若只是提醒无需替换则不写 replacement。\n' + ctx.text },
+        { role: 'user', content: '章节《' + ch.title + '》：\n"""\n' + ch.content.slice(0, 12000) + '\n"""\n输出：{"issues":[{"dimension":"逻辑|人设|文风|节奏|AI腔","quote":"逐字原文摘录","analysis":"问题分析","suggestion":"修改建议","replacement":"建议替换后的文本(可选)"}]}，没有就输出 {"issues":[]}。' }
       ]);
       const issues = (data.issues || []).filter(i => i && i.analysis);
       if (!issues.length) {
@@ -1193,24 +1220,66 @@ const Writing = {
         toast('审校通过：未发现明显问题', 'ok');
         return;
       }
+      // 报告面板：逐条审阅，觉得哪条好就点「应用替换」（自动快照可回滚）
       const body = el('div', {});
-      for (const it of issues) {
-        body.appendChild(el('div', { class: 'issue ' + (it.dimension === 'AI腔' ? 'low' : 'med') },
-          el('div', { style: 'display:flex;gap:8px;align-items:center;justify-content:space-between' },
-            el('b', { text: '[' + (it.dimension || '问题') + ']' }),
-            el('button', { class: 'btn small danger', text: '✗ 忽略', onclick: (e) => { e.target.closest('.issue').remove(); } })
-          ),
-          it.quote ? el('div', { class: 'q', text: '原文：' + it.quote }) : null,
-          el('div', { style: 'margin-top:6px;font-size:14px;line-height:1.7', text: it.analysis }),
-          it.suggestion ? el('div', { class: 'muted', style: 'margin-top:6px', text: '建议：' + it.suggestion }) : null
-        ));
-      }
+      const renderIssues = () => {
+        body.innerHTML = '';
+        let canApply = 0;
+        for (const it of issues) {
+          if (it.replacement && it.replacement.trim()) canApply++;
+          body.appendChild(el('div', { class: 'issue ' + (it.dimension === 'AI腔' ? 'low' : 'med') },
+            el('div', { style: 'display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap' },
+              el('b', { text: '[' + (it.dimension || '问题') + ']' + (it.applied ? ' ✅已替换' : '') }),
+              el('div', { style: 'display:flex;gap:6px' },
+                it.replacement && it.replacement.trim() && !it.applied ? el('button', { class: 'btn small primary', text: '✅ 用这条替换', onclick: async (e) => {
+                  const ok2 = await this.applyReplacement(it);
+                  if (ok2) { it.applied = true; renderIssues(); }
+                } }) : null,
+                el('button', { class: 'btn small danger', text: '✗ 忽略', onclick: (e) => { e.target.closest('.issue').remove(); } })
+              )
+            ),
+            it.quote ? el('div', { class: 'q', text: '原文：' + it.quote }) : null,
+            it.replacement && it.replacement.trim() ? el('div', { class: 'q', style: 'border-left-color:#5aa469', text: '替换为：' + it.replacement }) : null,
+            el('div', { style: 'margin-top:6px;font-size:14px;line-height:1.7', text: it.analysis }),
+            it.suggestion ? el('div', { class: 'muted', style: 'margin-top:6px', text: '建议：' + it.suggestion }) : null
+          ));
+        }
+        const bar = $('#review-progress');
+        if (bar) bar.textContent = canApply ? `💡 ${canApply} 条带替换方案，看中哪条点「用这条替换」（自动存档，可↩撤销）` : '以上为建议，可手动修改';
+      };
+      body.appendChild(el('div', { id: 'review-progress', class: 'muted', style: 'margin-bottom:6px' }));
+      renderIssues();
       await modal({ title: '🔍 全文审校 · 《' + ch.title + '》', body, okText: '关闭', cancelable: false });
-      await logAdd('审校', '《' + ch.title + '》审校完成，' + issues.length + ' 条建议');
+      await logAdd('审校', '《' + ch.title + '》审校完成，' + issues.length + ' 条建议' + (issues.filter(i => i.applied).length ? '，应用替换 ' + issues.filter(i => i.applied).length + ' 处' : ''));
     } catch (e) {
       toast('审校失败：' + e.message, 'err');
     }
     this.setBusy(false);
+  },
+
+  /* 应用单条替换（用户看中哪条用哪条）：快照 → 定位原文 → 替换 */
+  async applyReplacement(it) {
+    const ch = await this.getCur();
+    if (!ch) return false;
+    const quote = it.quote || '';
+    const rep = (it.replacement || '').trim();
+    if (!quote || !rep) return false;
+    const idx = ch.content.indexOf(quote);
+    if (idx === -1) {
+      toast('未能在正文中找到该原文片段（可能已被改动），请手动修改：「' + quote.slice(0, 15) + '…」', 'err');
+      return false;
+    }
+    ch.snapshots = ch.snapshots || [];
+    ch.snapshots.push({ time: Date.now(), content: ch.content });
+    if (ch.snapshots.length > 15) ch.snapshots.shift();
+    ch.content = ch.content.slice(0, idx) + rep + ch.content.slice(idx + quote.length);
+    ch.updatedAt = Date.now();
+    await dbPut('chapters', ch);
+    await logAdd('审校', '应用替换（' + it.dimension + '）：「' + quote.slice(0, 12) + '…」');
+    this.renderEditor(ch);
+    this.refreshList();
+    toast('已替换（可点「↩ 撤销」回滚）', 'ok');
+    return true;
   },
 
   /* 立即保存当前编辑内容（发消息/识别/审校前调用，保证 AI 读到最新正文） */
@@ -1275,6 +1344,58 @@ const Writing = {
     const req = meta.reqText || '';
     const text = '（换一版）请基于刚才同一个要求，重新生成一版新的内容：角度、表达、细节与上一版明显不同，风格一致且符合人设；不要复述我的要求，直接输出新内容。\n原要求：' + req;
     await this.chatAsk(text, { ...meta, silentUser: true, label: '换一版' });
+  },
+
+  /* 💡 灵感：AI 基于当前章节+设定生成剧情灵感，可用/可收藏 */
+  async getIdeas() {
+    if (this.busy) return;
+    const ch = await this.getCur();
+    await this.flushSave();
+    this.setBusy(true);
+    toast('💡 AI 正在生成灵感…', 'info');
+    try {
+      const ctx = await AI.projectContext({ chapterId: this.curId });
+      const data = await AI.json([
+        { role: 'system', content: '你是网文剧情灵感策划。基于当前章节与设定，给出具体可用的创作灵感：剧情走向、冲突爆发、伏笔回收、角色互动、金手指升级、反转、新场景等。每条要具体（谁+做了什么+引发什么），不要空泛套话。\n' + ctx.text },
+        { role: 'user', content: '当前章节《' + (ch ? ch.title : '') + '》末尾：\n' + (ch ? (ch.content || '').slice(-1500) : '（无正文）') + '\n输出：{"ideas":[{"type":"剧情走向|冲突|伏笔|人物互动|金手指|反转|场景","title":"一句话标题","content":"具体灵感描述(50字左右)"}]}，6~8 条。' }
+      ]);
+      const ideas = (data.ideas || []).filter(i => i && i.content);
+      if (!ideas.length) { toast('未生成有效灵感，请重试', 'err'); return; }
+      await this.showIdeas(ideas);
+    } catch (e) {
+      toast('灵感生成失败：' + e.message, 'err');
+    }
+    this.setBusy(false);
+  },
+
+  async showIdeas(ideas) {
+    const saved = JSON.parse(localStorage.getItem('workbench_ideas') || '[]');
+    const body = el('div', {});
+    const renderIdeas = () => {
+      body.innerHTML = '';
+      body.appendChild(el('div', { class: 'muted', style: 'margin-bottom:8px', text: '⭐ 已收藏 ' + saved.length + ' 条灵感（收藏存在本机）。「✍️ 使用」= 让 AI 按这条灵感直接写。' }));
+      ideas.forEach((it, idx) => {
+        body.appendChild(el('div', { style: 'display:flex;gap:8px;align-items:flex-start;padding:8px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;flex-wrap:wrap;background:var(--bg)' },
+          el('div', { style: 'flex:1;min-width:160px' },
+            el('div', { style: 'font-weight:700;font-size:13px', text: '[' + (it.type || '灵感') + '] ' + (it.title || '') }),
+            el('div', { style: 'font-size:13px;line-height:1.6;margin-top:4px', text: it.content })
+          ),
+          el('button', { class: 'btn small primary', text: '✍️ 使用', onclick: async () => {
+            await this.chatAsk('（灵感写作）请根据这条灵感写一段，延续当前章节：' + (it.type || '') + '｜' + (it.title || '') + '：' + it.content, { kind: 'chat', label: '灵感写作' });
+          } }),
+          el('button', { class: 'btn small', text: '⭐ 收藏', onclick: () => {
+            if (!saved.some(x => x.title === it.title && x.content === it.content)) {
+              saved.push({ type: it.type, title: it.title, content: it.content, at: Date.now() });
+              localStorage.setItem('workbench_ideas', JSON.stringify(saved));
+            }
+            toast('已收藏', 'ok');
+            renderIdeas();
+          } })
+        ));
+      });
+    };
+    renderIdeas();
+    await modal({ title: '💡 灵感池', body, okText: '关闭', cancelable: false });
   },
 
   /* 续写（不选中任何内容时，AI 只能在文末续写） */
