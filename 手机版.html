@@ -174,6 +174,40 @@ nav.bottom { display: none; }
 .m-text .zone-card .d { flex: 1; font-size: 13px; color: var(--ink); line-height: 1.6; min-width: 120px; }
 .m-text .zone-card .tag { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--accent-soft); white-space: nowrap; }
 .m-text .zone-card .tag.belong { background: #f3e3c8; color: #8a5a1e; }
+/* 3×3 方位拼图 */
+.map-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.map-zone {
+  border: 1px solid var(--line); border-radius: 12px; padding: 8px;
+  background: var(--panel); display: flex; flex-direction: column; gap: 6px;
+  min-height: 132px; position: relative;
+}
+.map-zone.center { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(201,139,75,.15); }
+.map-zone-h { font-size: 12px; font-weight: 700; color: var(--ink2); text-align: center; letter-spacing: 4px; opacity: .85; }
+.map-zone-items { flex: 1; display: flex; flex-direction: column; gap: 5px; overflow: hidden; }
+.map-zone-empty { border: 1px dashed var(--line); border-radius: 8px; color: var(--ink2); font-size: 11px; text-align: center; padding: 6px 0; opacity: .5; }
+.zone-pin {
+  border: 1px solid var(--line); border-radius: 8px; padding: 5px 7px;
+  background: var(--bg); font-size: 12px; line-height: 1.5;
+}
+.map-zone.center .zone-pin { border-color: rgba(201,139,75,.45); }
+.zone-pin .zp-head { font-weight: 700; font-size: 12.5px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.zone-pin .zp-head em { font-style: normal; font-weight: 400; color: #8a5a1e; background: #f3e3c8; border-radius: 6px; padding: 0 5px; font-size: 11px; }
+.zone-pin .zp-desc { color: var(--ink2); font-size: 11px; margin-top: 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.zone-pin .zp-acts { display: flex; gap: 4px; margin-top: 3px; }
+.zone-pin .zp-acts .btn { padding: 1px 7px; font-size: 11px; }
+.zone-add { align-self: flex-end; padding: 1px 9px; font-size: 11px; opacity: .7; }
+.zone-add:hover { opacity: 1; }
+@media (max-width: 768px) {
+  .map-grid { gap: 6px; }
+  .map-zone { padding: 6px; min-height: 96px; border-radius: 10px; }
+  .map-zone-h { font-size: 11px; letter-spacing: 2px; }
+  .zone-pin { padding: 3px 5px; }
+  .zone-pin .zp-head { font-size: 11.5px; }
+  .zone-pin .zp-desc { display: none; }
+  .zone-pin .zp-acts { display: none; }
+  .zone-pin { cursor: pointer; }
+  .zone-pin:active { background: var(--accent-soft); }
+}
 /* 地图 AI 对话面板 */
 .map-ai {
   width: 330px; min-width: 330px; border-left: 1px solid var(--line); background: var(--bg2);
@@ -2922,7 +2956,7 @@ const MapPage = {
 
   async focus() {
     const maps = await dbAll('maps');
-    if (maps.length && (!this.map || !maps.find(m => m.id === this.map.id))) {
+    if (maps.length) {
       this.map = maps[0];
       this.textMap = this.map.textMap || { items: [] };
     }
@@ -2963,7 +2997,7 @@ const MapPage = {
 
   async saveMap() { this.map.textMap = this.textMap; await dbPut('maps', this.map); },
 
-  /* ===== 文字地图 ===== */
+  /* ===== 文字地图（3×3 方位拼图：上北下南左西右东） ===== */
   renderTextView() {
     const view = $('#m-text-view', this.c);
     if (!view) return;
@@ -2971,21 +3005,59 @@ const MapPage = {
     const items = this.textMap.items || [];
     $('#m-count', this.c).textContent = items.length ? items.length + ' 个区域' : '';
     if (!items.length) {
-      view.appendChild(el('div', { class: 'empty-tip', text: '还没有文字地图区域。\n· 点「＋ 新增区域」手写（如：齐国 · 国家 · 东方 · 中原大国）\n· 或「🤖 AI 生成」让 AI 根据你的世界观设定 + 势力结构（魏国→州郡→城市）自动生成整套区域，逐条确认采纳' }));
+      view.appendChild(el('div', { class: 'empty-tip', text: '还没有文字地图区域。\n· 点「＋ 新增区域」手写（如：齐国 · 国家 · 东方 · 中原大国）\n· 或「🤖 AI 生成」让 AI 根据你的世界观设定 + 势力结构（魏国→州郡→城市）自动生成，区域会自动按方位铺到地图格子里' }));
       return;
     }
-    const groups = {};
-    for (const z of this.ZONES) groups[z] = items.filter(i => i.zone === z);
-    const others = items.filter(i => !this.ZONES.includes(i.zone));
-    for (const z of this.ZONES) {
-      if (!groups[z].length) continue;
-      view.appendChild(el('h4', { text: '▸ ' + z }));
-      for (const it of groups[z]) this.appendTextCard(view, it);
+    // 9 宫格布局顺序（地图方位）
+    const GRID = [
+      ['西北', '北方', '东北'],
+      ['西方', '中央', '东方'],
+      ['西南', '南方', '东南']
+    ];
+    const grid = el('div', { class: 'map-grid' });
+    for (const row of GRID) {
+      for (const zone of row) {
+        grid.appendChild(this.zoneCell(zone, items.filter(i => i.zone === zone)));
+      }
     }
+    view.appendChild(grid);
+    // 未标方位的旧条目放底部
+    const others = items.filter(i => !this.ZONES.includes(i.zone));
     if (others.length) {
-      view.appendChild(el('h4', { text: '▸ 其他' }));
+      view.appendChild(el('h4', { style: 'margin-top:14px', text: '▸ 未标方位' }));
       for (const it of others) this.appendTextCard(view, it);
     }
+  },
+
+  /* 单个方位格子 */
+  zoneCell(zone, items) {
+    const cell = el('div', { class: 'map-zone' + (zone === '中央' ? ' center' : '') });
+    cell.appendChild(el('div', { class: 'map-zone-h', text: zone + (zone === '中央' ? ' · 中' : '') }));
+    const box = el('div', { class: 'map-zone-items' });
+    if (!items.length) box.appendChild(el('div', { class: 'map-zone-empty', text: '（无）' }));
+    for (const it of items) box.appendChild(this.zonePin(it));
+    cell.appendChild(box);
+    cell.appendChild(el('button', { class: 'zone-add btn small', text: '＋', title: '在「' + zone + '」添加区域', onclick: () => this.addTextItem(zone) }));
+    return cell;
+  },
+
+  /* 格子里的一条区域（钉子，点击主体=编辑） */
+  zonePin(it) {
+    const icon = this.TYPE_ICONS[it.type] || '📌';
+    return el('div', { class: 'zone-pin', title: (it.desc || '') + (it.belong ? '\n归属：' + it.belong : ''), onclick: () => this.editTextItem(it) },
+      el('div', { class: 'zp-head', html: icon + ' ' + esc(it.name) + (it.belong ? ' <em>(' + esc(it.belong) + ')</em>' : '') }),
+      it.desc ? el('div', { class: 'zp-desc', text: it.desc }) : null,
+      el('div', { class: 'zp-acts' },
+        el('button', { class: 'btn small', text: '✏️', title: '编辑', onclick: (e) => { e.stopPropagation(); this.editTextItem(it); } }),
+        el('button', { class: 'btn small danger', text: '🗑', title: '删除', onclick: async (e) => {
+          e.stopPropagation();
+          if (!(await confirmDlg('删除区域「' + it.name + '」？'))) return;
+          this.textMap.items = this.textMap.items.filter(x => x !== it);
+          await this.saveMap();
+          this.renderTextView();
+        } })
+      )
+    );
   },
 
   appendTextCard(view, it) {
@@ -3005,12 +3077,12 @@ const MapPage = {
     ));
   },
 
-  async addTextItem() {
+  async addTextItem(presetZone = '') {
     const nameInp = el('input', { class: 'input', style: 'width:100%', placeholder: '名称，如：齐国 / 横断山脉' });
     const typeSel = el('select', { class: 'input', style: 'width:100%' });
     for (const t of Object.keys(this.TYPE_ICONS)) typeSel.appendChild(el('option', { value: t, text: t }));
     const zoneSel = el('select', { class: 'input', style: 'width:100%' });
-    for (const z of this.ZONES) zoneSel.appendChild(el('option', { value: z, text: z }));
+    for (const z of this.ZONES) zoneSel.appendChild(el('option', { value: z, text: z, selected: z === presetZone ? 'selected' : null }));
     const belongInp = el('input', { class: 'input', style: 'width:100%', placeholder: '归属势力/上级（可选），如：魏国' });
     const descInp = el('textarea', { class: 'input', style: 'width:100%;min-height:60px', placeholder: '描述：位置关系/势力归属/特点…' });
     const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
