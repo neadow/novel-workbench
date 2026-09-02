@@ -163,14 +163,8 @@ nav.bottom { display: none; }
 .map-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .map-toolbar { display: flex; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--bg2); align-items: center; flex-wrap: wrap; }
 .map-toolbar .spacer { flex: 1; }
-.map-stage { flex: 1; position: relative; overflow: hidden; background: #10141c; }
-.map-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
-.map-pop { position: absolute; z-index: 20; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; box-shadow: var(--shadow); max-width: 280px; font-size: 13px; }
 /* 文字地图视图 */
-.m-text {
-  position: absolute; inset: 0; z-index: 25; overflow: auto; padding: 14px;
-  background: var(--bg); color: var(--ink);
-}
+.m-text { flex: 1; overflow: auto; padding: 14px; background: var(--bg); color: var(--ink); }
 .m-text h4 { font-size: 14px; margin: 12px 0 6px; display: flex; align-items: center; gap: 8px; }
 .m-text .zone-card {
   border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 6px;
@@ -179,11 +173,7 @@ nav.bottom { display: none; }
 .m-text .zone-card .t { font-weight: 700; font-size: 13px; min-width: 90px; }
 .m-text .zone-card .d { flex: 1; font-size: 13px; color: var(--ink); line-height: 1.6; min-width: 120px; }
 .m-text .zone-card .tag { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--accent-soft); white-space: nowrap; }
-.map-versions { position: absolute; right: 12px; top: 12px; z-index: 20; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; max-height: 60%; overflow: auto; width: 220px; box-shadow: var(--shadow); }
-.map-versions h5 { font-size: 13px; margin-bottom: 6px; }
-.version-item { font-size: 12px; padding: 5px 6px; border-radius: 8px; cursor: pointer; }
-.version-item.on { background: var(--accent-soft); }
-.version-item .ev { font-size: 11px; color: var(--ink2); }
+.m-text .zone-card .tag.belong { background: #f3e3c8; color: #8a5a1e; }
 /* 地图 AI 对话面板 */
 .map-ai {
   width: 330px; min-width: 330px; border-left: 1px solid var(--line); background: var(--bg2);
@@ -2451,7 +2441,7 @@ const World = {
     if (!items.length) { box.innerHTML = '<div class="empty-tip">该分类还没有设定。<br>· 点「＋ 新增设定」手动添加<br>· 或右侧「🤖 世界观 AI」对话沟通，AI 产出草案你确认后自动入库</div>'; return; }
     for (const it of items) {
       box.appendChild(el('div', { class: 'card world-item' },
-        el('div', { class: 'title', html: `[${esc(it.category)}] ${esc(it.title || '未命名')}` }),
+        el('div', { class: 'title', html: `[${esc(it.category)}] ${esc(it.title || '未命名')}${it.parent ? ` <span style="color:#c98b4b;font-weight:400;font-size:12px">↳ 上级：${esc(it.parent)}</span>` : ''}` }),
         el('div', { class: 'content', text: it.content || '（空）' }),
         el('div', { style: 'display:flex;gap:8px;margin-top:8px' },
           el('button', { class: 'btn small', text: '✏️ 编辑', onclick: () => this.editItem(it) }),
@@ -2479,7 +2469,7 @@ const World = {
     lines.push('\n【人物】' + (chars.length ? chars.map(x => x.name).join('、') : '（暂无）'));
     lines.push('【势力组织】' + (tree.nodes.length ? tree.nodes.map(n => n.name + (n.role ? '(' + n.role + ')' : '')).join('、') : '（暂无）'));
     const places = [];
-    for (const m of maps) for (const v of m.versions || []) for (const p of v.markers || []) places.push(p.name);
+    for (const m of maps) for (const it of (m.textMap && m.textMap.items) || []) places.push(it.name + (it.belong ? '(属' + it.belong + ')' : ''));
     lines.push('【地图地点】' + (places.length ? places.join('、') : '（暂无）'));
     return lines.join('\n');
   },
@@ -2516,30 +2506,60 @@ const World = {
     if (!box) return;
     box.innerHTML = '';
     if (!chat.messages.length) {
-      box.innerHTML = '<div class="empty-tip">和世界观 AI 沟通：<br>· 聊设定细节（"境界体系怎么分层合理？"）<br>· 规划势力格局（"北方该有个强国"）<br>· 设计地理（"横断山脉隔开齐楚"）<br>· 聊得差不多点「🤖 生成设定草案」批量入库</div>';
+      box.innerHTML = '<div class="empty-tip">和世界观 AI 沟通：<br>· 聊设定细节（"境界体系怎么分层合理？"）<br>· 规划势力格局（"北方魏国，下设兖州等州郡"）<br>· 设计地理（"横断山脉隔开齐楚"）<br>· AI 回答你认可的，点「⭐ 认可」，再点「🤖 生成设定草案」只按认可的内容入库</div>';
       return;
     }
+    const approvedCount = chat.messages.filter(m => m.role === 'assistant' && m.meta && m.meta.approved).length;
+    if (approvedCount) box.appendChild(el('div', { class: 'muted', style: 'padding:6px 12px;font-size:12px', text: '✅ 已认可 ' + approvedCount + ' 条 AI 回答 → 点「🤖 生成设定草案」将只按这些内容入库' }));
     for (const m of chat.messages) {
       const div = el('div', { class: 'msg ' + (m.role === 'user' ? 'user' : 'ai') });
       div.textContent = m.content;
+      if (m.role === 'assistant' && !(m.meta && m.meta.err)) {
+        const approved = !!(m.meta && m.meta.approved);
+        div.appendChild(el('div', { class: 'acts' },
+          el('button', { class: 'btn small' + (approved ? ' primary' : ''), text: approved ? '✅ 已认可（点此取消）' : '⭐ 认可这条', title: '标记这条 AI 回答为你认可的设定，生成草案时优先采用', onclick: async () => {
+            m.meta = m.meta || {};
+            m.meta.approved = !m.meta.approved;
+            await dbPut('chat', chat);
+            this.renderWorldChat();
+          } })
+        ));
+      }
       div.appendChild(el('div', { class: 'meta', text: new Date(m.ts || Date.now()).toLocaleTimeString('zh-CN', { hour12: false }) }));
       box.appendChild(div);
     }
     box.scrollTop = box.scrollHeight;
   },
 
-  /* 🤖 生成设定草案：AI 根据对话+现有设定输出结构化草案 → 逐条确认采纳入库 */
+  /* 🤖 生成设定草案：基于「认可的 AI 回复」（无认可则按最近对话）+ 现有设定 → 结构化草案（含势力层级）→ 逐条确认采纳 */
   async generateDraft() {
     if (this.busy) { toast('AI 处理中…', 'info'); return; }
     const chat = await dbGet('chat', 'worldchat') || { id: 'worldchat', messages: [] };
     const ctx = await this.worldContext();
-    const chatTail = chat.messages.slice(-8).map(m => (m.role === 'user' ? '我：' : 'AI：') + m.content.slice(0, 300)).join('\n');
+    // 收集被认可的 AI 回复（连同对应的用户提问，便于理解上下文）
+    const approved = chat.messages.filter(m => m.role === 'assistant' && m.meta && m.meta.approved && !m.meta.err);
+    let basis;
+    if (approved.length) {
+      const lines = [];
+      for (let i = 0; i < chat.messages.length; i++) {
+        const m = chat.messages[i];
+        if (m.role === 'assistant' && m.meta && m.meta.approved && !m.meta.err) {
+          // 往前找对应的用户提问（最近一条用户消息）
+          let ask = '';
+          for (let j = i - 1; j >= 0; j--) { if (chat.messages[j].role === 'user') { ask = chat.messages[j].content.slice(0, 200); break; } }
+          lines.push((ask ? '【我的提问】' + ask + '\n' : '') + '【认可的 AI 回答】' + m.content);
+        }
+      }
+      basis = '以下是我认可的对话内容，请严格基于这些整理设定（不要引入认可内容之外的设想）：\n' + lines.join('\n\n');
+    } else {
+      basis = '最近对话：\n' + chat.messages.slice(-8).map(m => (m.role === 'user' ? '我：' : 'AI：') + m.content.slice(0, 300)).join('\n');
+    }
     this.busy = true;
     toast('🤖 AI 正在整理设定草案…', 'info');
     try {
       const data = await AI.json([
-        { role: 'system', content: '你是小说世界观设定编辑。根据对话与现有设定，整理出需要新增/更新的设定条目。只输出 JSON。\n当前世界观状态：\n' + ctx },
-        { role: 'user', content: '最近对话：\n' + (chatTail || '（无）') + '\n输出：{"items":[{"category":"境界体系|功法|势力|金手指|时间线|地理|其他","title":"设定名","content":"设定内容(详细)"}]}，3~8 条。' }
+        { role: 'system', content: '你是小说世界观设定编辑。根据对话内容整理出需要新增/更新的设定条目。特别要求识别「势力结构」：如果对话里有「魏国下面几个省市」「魏国→兖州→许都」这类层级关系（国家→州郡→城市，或宗门→分堂→据点等），要生成带 parent 的势力条目链，例如：{"category":"势力","title":"魏国","parent":""} → {"category":"势力","title":"兖州","parent":"魏国"} → {"category":"势力","title":"许都","parent":"兖州"}。parent 填父条目标题（父级也应是本批条目或已有设定），无父级则留空。其他分类的设定如需层级同样用 parent。只输出 JSON。\n当前世界观状态：\n' + ctx },
+        { role: 'user', content: basis + '\n输出：{"items":[{"category":"境界体系|功法|势力|金手指|时间线|地理|其他","title":"设定名","content":"设定内容(详细)","parent":"父条目标题(无则空)"}]}，3~10 条。' }
       ]);
       const items = (data.items || []).filter(i => i && i.title && i.content);
       if (!items.length) { toast('未整理出有效草案', 'err'); return; }
@@ -2550,7 +2570,7 @@ const World = {
     this.busy = false;
   },
 
-  /* 草案确认面板：逐条采纳/忽略/修改 → 写入世界观库（全工具自动同步） */
+  /* 草案确认面板：逐条采纳/忽略/修改（含上级）→ 写入世界观库 + 势力树同步 */
   async showDraftPanel(items) {
     const pending = items.slice();
     let done = 0, adopted = 0;
@@ -2563,7 +2583,7 @@ const World = {
         left++;
         body.appendChild(el('div', { style: 'display:flex;gap:8px;align-items:flex-start;padding:8px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;flex-wrap:wrap;background:var(--bg)' },
           el('div', { style: 'flex:1;min-width:160px' },
-            el('div', { style: 'font-weight:700;font-size:13px', text: '[' + (it.category || '设定') + '] ' + it.title }),
+            el('div', { style: 'font-weight:700;font-size:13px', text: '[' + (it.category || '设定') + '] ' + it.title + (it.parent ? ' <span style="color:#c98b4b;font-weight:400">↳ 属于 ' + esc(it.parent) + '</span>' : '') }),
             el('div', { style: 'font-size:13px;line-height:1.6;margin-top:4px', text: it.content })
           ),
           el('button', { class: 'btn small primary', text: '✅ 采纳', onclick: async () => {
@@ -2577,56 +2597,103 @@ const World = {
             if (t) it.title = t;
             const c = await textareaDlg('修改设定内容', it.content);
             if (c) it.content = c;
+            const p = await promptDlg('上级条目（势力层级用，如：魏国；留空为顶层）', it.parent || '');
+            if (p !== null) it.parent = p;
             renderList();
           } })
         ));
       });
       const bar = $('#draft-progress');
-      if (bar) bar.textContent = left ? `⏳ 剩余 ${left} 条（采纳后自动入库，写作/人物/势力/地图同步生效）` : '✅ 已全部处理';
+      if (bar) bar.textContent = left ? `⏳ 剩余 ${left} 条（采纳后自动入库；势力条目同时同步到「势力」树状图）` : '✅ 已全部处理';
     };
     body.appendChild(el('div', { id: 'draft-progress', class: 'muted', style: 'margin-bottom:8px' }));
     renderList();
     await modal({ title: '🤖 设定草案确认', body, okText: '完成', cancelable: false });
     if (adopted) {
       await logAdd('世界观', '草案采纳 ' + adopted + ' 条设定');
-      toast('已入库 ' + adopted + ' 条设定，全工具已同步', 'ok');
+      toast('已入库 ' + adopted + ' 条设定，势力结构已同步', 'ok');
     }
   },
 
   async adoptItem(it) {
     const rec = await dbGet('world', 'world') || { id: 'world', items: [] };
-    if (!rec.items.some(x => x.title === it.title && x.category === it.category)) {
-      rec.items.push({ id: uid(), category: it.category || '其他', title: it.title, content: it.content, updatedAt: Date.now() });
-      await dbPut('world', rec);
+    const parent = (it.parent || '').trim();
+    const existing = rec.items.find(x => x.title === it.title && x.category === it.category);
+    if (existing) {
+      existing.content = it.content;
+      existing.parent = parent;
+      existing.updatedAt = Date.now();
     } else {
-      const ex = rec.items.find(x => x.title === it.title);
-      ex.content = it.content;
-      await dbPut('world', rec);
+      rec.items.push({ id: uid(), category: it.category || '其他', title: it.title, content: it.content, parent, updatedAt: Date.now() });
+    }
+    await dbPut('world', rec);
+    // 势力条目同步势力树（双落地）
+    if (it.category === '势力') {
+      await this.syncFactionTree([{ title: it.title, content: it.content, parent }]);
+    }
+  },
+
+  /* 势力条目 → 势力树（双落地）：按 parent 链建节点，同名同父不重复 */
+  async syncFactionTree(items) {
+    const tree = await dbGet('sect', 'tree') || { id: 'tree', nodes: [] };
+    let changed = false;
+    const findNode = (name, parentId) => tree.nodes.find(n => n.name === name && (n.parentId || null) === (parentId || null));
+    const ensure = (it, seen = {}) => {
+      if (seen[it.title]) return; // 防循环
+      seen[it.title] = true;
+      let parentId = null;
+      if (it.parent) {
+        const pItem = items.find(x => x.title === it.parent);
+        if (pItem) ensure(pItem, seen); // 父条目也在本批 → 先建父
+        const pNode = tree.nodes.find(n => n.name === it.parent);
+        parentId = pNode ? pNode.id : null;
+      }
+      if (!findNode(it.title, parentId)) {
+        tree.nodes.push({ id: uid(), parentId, name: it.title, role: '', characterId: null, note: it.content || '' });
+        changed = true;
+      }
+    };
+    for (const it of items) ensure(it);
+    if (changed) {
+      await dbPut('sect', tree);
+      await logAdd('势力', '势力结构同步到势力树：' + items.map(i => i.title).join('、'));
     }
   },
 
   async editItem(item) {
     const isNew = !item;
+    const rec = await dbGet('world', 'world') || { id: 'world', items: [] };
     const catSel = el('select', { class: 'input', style: 'width:100%' });
     for (const cat of this.cats.slice(1)) catSel.appendChild(el('option', { value: cat, text: cat, selected: item && item.category === cat ? 'selected' : null }));
     const titleInp = el('input', { class: 'input', style: 'width:100%', value: item ? item.title : '', placeholder: '设定标题，如：练气九层' });
+    // 上级设定（势力层级用）：列出库内其他条目标题
+    const parentSel = el('select', { class: 'input', style: 'width:100%' });
+    parentSel.appendChild(el('option', { value: '', text: '（无上级 / 顶层）' }));
+    for (const x of rec.items) {
+      if (item && x === item) continue;
+      parentSel.appendChild(el('option', { value: x.title, text: '[' + x.category + '] ' + x.title + (x.parent ? '（上级：' + x.parent + '）' : ''), selected: item && item.parent === x.title ? 'selected' : null }));
+    }
     const contInp = el('textarea', { class: 'input', style: 'width:100%;min-height:130px', html: item ? esc(item.content) : '', placeholder: '详细内容…' });
     const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
       el('div', {}, el('div', { class: 'muted', text: '分类' }), catSel),
       el('div', {}, el('div', { class: 'muted', text: '标题' }), titleInp),
+      el('div', {}, el('div', { class: 'muted', text: '上级设定（势力层级用，如：兖州的上级=魏国）' }), parentSel),
       el('div', {}, el('div', { class: 'muted', text: '内容' }), contInp)
     );
     const ok = await modal({ title: isNew ? '新增设定' : '编辑设定', body, okText: '💾 保存', cancelText: '取消' });
     if (!ok) return;
-    const rec = await dbGet('world', 'world') || { id: 'world', items: [] };
+    const title = titleInp.value.trim() || '未命名';
+    const content = contInp.value.trim();
+    const parent = parentSel.value;
     if (isNew) {
-      rec.items.push({ id: uid(), category: catSel.value, title: titleInp.value.trim() || '未命名', content: contInp.value.trim(), updatedAt: Date.now() });
-      await logAdd('世界观', '新增设定「' + titleInp.value + '」');
+      rec.items.push({ id: uid(), category: catSel.value, title, content, parent, updatedAt: Date.now() });
+      await logAdd('世界观', '新增设定「' + title + '」');
     } else {
-      item.category = catSel.value; item.title = titleInp.value.trim() || '未命名'; item.content = contInp.value.trim(); item.updatedAt = Date.now();
+      item.category = catSel.value; item.title = title; item.content = content; item.parent = parent; item.updatedAt = Date.now();
       await logAdd('世界观', '修改设定「' + item.title + '」');
     }
     await dbPut('world', rec);
+    if (catSel.value === '势力') await this.syncFactionTree([{ title, content, parent }]);
     toast('已保存', 'ok');
     this.render();
   }
@@ -2794,92 +2861,16 @@ PageMods.sect = Sect;
 ;
 ;/* ==== map.js ==== */
 'use strict';
-/* ===== 地图页：程序化地形生成 + 地点标记 + 版本时间线 + 改名历史 ===== */
+/* ===== 地图页：文字地图（按方位分区的区域清单，可手写 / AI 按世界观生成）+ 地图 AI 对话 ===== */
 
-/* ---- 噪声（Perlin） ---- */
-const Noise = (() => {
-  const perm = new Uint8Array(512);
-  const p = new Uint8Array(256);
-  let seeded = false;
-  function seed(s) {
-    for (let i = 0; i < 256; i++) p[i] = i;
-    let x = s >>> 0;
-    for (let i = 255; i > 0; i--) {
-      x = (x * 1103515245 + 12345) >>> 0;
-      const j = x % (i + 1);
-      const t = p[i]; p[i] = p[j]; p[j] = t;
-    }
-    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
-    seeded = true;
-  }
-  function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
-  function lerp(a, b, t) { return a + t * (b - a); }
-  function grad(h, x, y) {
-    const g = h & 7;
-    const u = g < 4 ? x : y, v = g < 4 ? y : x;
-    return ((g & 1) ? -u : u) + ((g & 2) ? -v : v);
-  }
-  function noise2(x, y) {
-    if (!seeded) seed(1337);
-    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
-    x -= Math.floor(x); y -= Math.floor(y);
-    const u = fade(x), v = fade(y);
-    const a = perm[X] + Y, b = perm[X + 1] + Y;
-    return lerp(
-      lerp(grad(perm[a], x, y), grad(perm[b], x - 1, y), u),
-      lerp(grad(perm[a + 1], x, y - 1), grad(perm[b + 1], x - 1, y - 1), u),
-      v) * 0.707 + 0.5;
-  }
-  function fbm(x, y, oct = 4) {
-    let v = 0, amp = 0.5, f = 1, tot = 0;
-    for (let i = 0; i < oct; i++) { v += noise2(x * f, y * f) * amp; tot += amp; amp *= 0.5; f *= 2; }
-    return v / tot;
-  }
-  return { seed, noise2, fbm };
-})();
-
-/* ---- 图片压缩：把导入的草图压到最长边 1024 的 JPEG，适合存储与多模态分析 ---- */
-function compressImage(file) {
-  return new Promise((res, rej) => {
-    const fr = new FileReader();
-    fr.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const max = 1024;
-        let w = img.width, h = img.height;
-        if (w > max || h > max) { const k = Math.min(max / w, max / h); w = Math.round(w * k); h = Math.round(h * k); }
-        const cv = document.createElement('canvas');
-        cv.width = w; cv.height = h;
-        cv.getContext('2d').drawImage(img, 0, 0, w, h);
-        res(cv.toDataURL('image/jpeg', 0.85));
-      };
-      img.onerror = () => rej(new Error('图片无法解析'));
-      img.src = fr.result;
-    };
-    fr.onerror = () => rej(new Error('文件读取失败'));
-    fr.readAsDataURL(file);
-  });
-}
-
-/* ---- 地图数据与逻辑 ---- */
 const MapPage = {
   mounted: false,
-  W: 160, H: 284, // 地形分辨率
-  view: { scale: 1, ox: 0, oy: 0 }, // 相机
-  drag: null,
-  placing: null, // 待放置的地点类型
-  regionMode: false, regionPts: [],
-  curType: '全部',
-  sketchMode: false, // 草图模式
-  sketch: [], // [{points:[{x,y}], color}]
-  sketchColor: '#ffd27d',
-  draggingSketch: null,
+  map: null,
+  textMap: { items: [] }, // [{id,name,type,zone,belong,desc}]
   mapBusy: false,
-  textView: false, // 文字地图视图
-  textMap: { items: [] }, // [{id,name,type,zone,desc}]
-  sketchImage: null, // {dataUrl, name} 导入的参考草图
-  showSketchImage: true,
-  _sketchImgEl: null,
+
+  ZONES: ['北方', '东北', '东方', '东南', '南方', '西南', '西方', '西北', '中央'],
+  TYPE_ICONS: { '国家': '🏰', '州郡': '🏯', '城市': '🏙️', '山脉': '⛰️', '河流': '🏞️', '湖泊': '🏝️', '蛮荒': '🌲', '秘境': '✨', '战场': '⚔️', '水域': '🌊', '其他': '📌' },
 
   async mount(c) {
     this.c = c;
@@ -2887,188 +2878,78 @@ const MapPage = {
       <div class="map-page">
         <div class="map-main">
           <div class="map-toolbar">
-            <span style="font-weight:700">🗺️ 世界地图</span>
-            <button id="m-gen" class="btn small primary">🌍 生成/重置地形</button>
-            <button id="m-aiimg" class="btn small">🎨 AI 生成底图</button>
-            <button id="m-expand" class="btn small">➕ 扩充大陆</button>
-            <button id="m-marker" class="btn small">📍 添加地点</button>
-            <button id="m-region" class="btn small">🖍️ 势力区域</button>
-            <button id="m-done-region" class="btn small danger" hidden>✅ 完成区域</button>
-            <button id="m-sketch" class="btn small">✏️ 画草图</button>
-            <button id="m-sketch-undo" class="btn small">↩ 撤销一笔</button>
-            <button id="m-sketch-clear" class="btn small danger">🧹 清空草图</button>
-            <button id="m-img" class="btn small">🖼️ 导入草图</button>
-            <button id="m-img-toggle" class="btn small">👁️ 底图</button>
-            <button id="m-img-ai" class="btn small">🤖 分析草图</button>
-            <button id="m-text" class="btn small">📝 文字地图</button>
-            <select id="m-filter" class="input" style="width:auto;padding:6px 10px">
-              <option value="全部">全部地点</option>
-              <option value="宗门">🏯 宗门</option>
-              <option value="城市">🏙️ 城市</option>
-              <option value="秘境">✨ 秘境</option>
-              <option value="战场">⚔️ 战场</option>
-              <option value="其他">📌 其他</option>
-            </select>
+            <span style="font-weight:700">🗺️ 文字地图</span>
+            <span class="count" id="m-count"></span>
+            <button id="m-add" class="btn small primary">＋ 新增区域</button>
+            <button id="m-ai-gen" class="btn small" title="根据世界观设定 + 势力结构（魏国→州郡→城市）自动生成区域清单，逐条确认采纳">🤖 AI 生成</button>
+            <button id="m-clear" class="btn small danger" title="清空全部区域">🗑 清空</button>
             <div class="spacer"></div>
-            <span class="count" id="m-ver-label"></span>
-            <button id="m-newver" class="btn small">📸 新建版本</button>
-            <button id="m-ai-toggle" class="btn small">🤖 地图AI</button>
+            <button id="m-ai-toggle" class="btn small only-drawer">🤖 地图AI</button>
           </div>
-          <div class="map-stage" id="m-stage">
-            <canvas id="m-canvas"></canvas>
-            <div class="m-text" id="m-text-view" hidden></div>
-            <div class="map-pop" id="m-pop" hidden></div>
-            <div class="map-versions" id="m-versions" hidden>
-              <h5>📜 版本时间线</h5>
-              <div id="m-ver-list"></div>
-            </div>
-          </div>
+          <div class="m-text" id="m-text-view"></div>
         </div>
         <aside class="map-ai" id="map-ai">
           <div class="map-ai-h">
             🤖 地图 AI
-            <span class="ctx" title="地图 AI 与写作页 AI 对话相互独立">独立对话 · 已加载地形/草图/地点</span>
+            <span class="ctx" title="地图 AI 与写作页 AI 对话相互独立，自动携带文字地图 + 世界观设定 + 势力结构">已加载文字地图/世界观/势力</span>
             <div class="spacer"></div>
             <button id="m-ai-close" class="btn small">✕</button>
           </div>
           <div class="chat-quick">
-            <button id="mq-gen" class="btn small primary">🌍 按草图生成地形</button>
+            <button id="mq-gen" class="btn small primary" title="根据世界观设定 + 势力结构生成文字地图">🤖 生成文字地图</button>
             <button id="mq-clear" class="btn small">🗑清空对话</button>
           </div>
           <div id="map-chat-box" class="chat-box"></div>
           <div class="chat-in">
-            <textarea id="map-chat-input" rows="2" placeholder="和 AI 聊地图：描述你的世界构想、让它规划大陆与地点，或先画草图再让它按草图生成地形…"></textarea>
+            <textarea id="map-chat-input" rows="2" placeholder="和 AI 聊世界地理：描述国家、州郡、山脉河流的方位布局，让它规划区域；或直接点「🤖 生成文字地图」…"></textarea>
             <button id="map-chat-send" class="btn primary">发送</button>
           </div>
         </aside>
       </div>`;
-    this.canvas = $('#m-canvas', c);
-    this.ctx = this.canvas.getContext('2d');
-    this.stage = $('#m-stage', c);
-    this.pop = $('#m-pop', c);
     this.bind();
-    // 初始化地图
+    // 初始化地图数据（兼容旧工程：旧版 maps 带 versions/markers，取 textMap 即可）
     let maps = await dbAll('maps');
     if (!maps.length) {
-      const m = this.newMap();
+      const m = { id: uid(), name: '主世界', textMap: { items: [] } };
       await dbPut('maps', m);
       maps = [m];
     }
     this.map = maps[0];
-    this.sketch = this.map.sketch || [];
-    this.sketchImage = this.map.sketchImage || null;
     this.textMap = this.map.textMap || { items: [] };
-    this._sketchImgEl = null;
-    this.render();
+    this.renderTextView();
     await this.renderMapChat();
   },
+
   async focus() {
     const maps = await dbAll('maps');
     if (maps.length && (!this.map || !maps.find(m => m.id === this.map.id))) {
       this.map = maps[0];
-      this.sketch = this.map.sketch || [];
-      this.sketchImage = this.map.sketchImage || null;
       this.textMap = this.map.textMap || { items: [] };
-      this._sketchImgEl = null;
     }
-    this.render();
+    this.renderTextView();
+    await this.renderMapChat();
   },
-
-  newMap() {
-    const t = { seed: (Math.random() * 1e9) | 0, continents: 3, mountains: 0.5, rivers: 6, forests: 0.4 };
-    const v = { id: uid(), label: 'v1 · 创世', event: '世界初生', time: Date.now(), markers: [], regions: [], terrain: t };
-    return { id: uid(), name: '主世界', versions: [v], current: 0 };
-  },
-
-  getCur() { return this.map ? this.map.versions[this.map.current] : null; },
 
   bind() {
     const c = this.c;
-    $('#m-gen', c).onclick = async () => {
-      const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' });
-      const mk = (label, id, min, max, val, step = 1) => {
-        const row = el('div', {});
-        row.appendChild(el('div', { class: 'muted', text: label + '：<span id="' + id + '-v">' + val + '</span>' }));
-        const inp = el('input', { type: 'range', min, max, step, value: val, style: 'width:100%' });
-        inp.oninput = () => $('#' + id + '-v', body).textContent = inp.value;
-        row.appendChild(inp);
-        return { row, inp };
-      };
-      const cur = this.getCur().terrain;
-      const a1 = mk('大陆数量', 'g-cont', 1, 6, cur.continents);
-      const a2 = mk('山脉密度', 'g-mount', 0.1, 1, cur.mountains, 0.05);
-      const a3 = mk('河流条数', 'g-river', 0, 15, cur.rivers);
-      const a4 = mk('森林密度', 'g-forest', 0, 0.8, cur.forests, 0.05);
-      const seedInp = el('input', { class: 'input', style: 'width:100%', value: cur.seed });
-      body.appendChild(el('div', {}, el('div', { class: 'muted', text: '随机种子（换一个数字 = 换一个世界）' }), seedInp));
-      for (const a of [a1, a2, a3, a4]) body.appendChild(a.row);
-      const ok = await modal({ title: '🌍 生成世界地形', body, okText: '🌍 生成', cancelText: '取消' });
-      if (!ok) return;
-      const v = this.getCur();
-      v.terrainType = 'proc';
-      v.terrain = {
-        seed: parseInt(seedInp.value) || 1,
-        continents: +a1.inp.value, mountains: +a2.inp.value, rivers: +a3.inp.value, forests: +a4.inp.value
-      };
+    $('#m-add', c).onclick = () => this.addTextItem();
+    $('#m-ai-gen', c).onclick = () => this.aiGenTextMap();
+    $('#m-clear', c).onclick = async () => {
+      if (!this.textMap.items.length) { toast('文字地图本来就是空的', 'info'); return; }
+      if (!(await confirmDlg('清空全部文字地图区域？'))) return;
+      this.textMap.items = [];
       await this.saveMap();
-      this.draw();
+      await logAdd('地图', '清空文字地图');
+      this.renderTextView();
     };
-    $('#m-marker', c).onclick = () => {
-      this.regionMode = false;
-      this.placing = this.placing ? null : '宗门';
-      $('#m-region', c).classList.toggle('primary', false);
-      $('#m-marker', c).classList.toggle('primary', !!this.placing);
-      toast(this.placing ? '在地图上点一下放置地点（默认宗门，可在筛选框旁弹窗里改类型）' : '已取消放置', 'info');
-    };
-    $('#m-region', c).onclick = () => {
-      this.placing = null;
-      this.regionMode = !this.regionMode;
-      $('#m-region', c).classList.toggle('primary', this.regionMode);
-      $('#m-done-region', c).hidden = !this.regionMode;
-      if (this.regionMode) { this.regionPts = []; toast('点击地图添加区域顶点（至少3个），点「完成区域」结束', 'info'); }
-    };
-    $('#m-done-region', c).onclick = async () => {
-      if (this.regionPts.length < 3) { toast('至少需要 3 个顶点', 'err'); return; }
-      const name = await promptDlg('区域名称', '', '如：青云宗领地');
-      if (!name) { return; }
-      const color = ['#c98b4b', '#5aa469', '#4a8fc9', '#c95b5b', '#8a5aa4', '#c98b8b'][Math.floor(Math.random() * 6)];
-      this.getCur().regions.push({ id: uid(), name, color, points: [...this.regionPts] });
-      this.regionMode = false; this.regionPts = [];
-      $('#m-region', c).classList.remove('primary');
-      $('#m-done-region', c).hidden = true;
-      await this.saveMap();
-      await logAdd('地图', '新增势力区域「' + name + '」');
-      this.draw();
-    };
-    $('#m-filter', c).onchange = (e) => { this.curType = e.target.value; this.draw(); };
-    // 草图
-    $('#m-sketch', c).onclick = () => {
-      this.placing = null; this.regionMode = false; this.regionPts = [];
-      $('#m-region', c).classList.remove('primary');
-      $('#m-marker', c).classList.remove('primary');
-      $('#m-done-region', c).hidden = true;
-      this.sketchMode = !this.sketchMode;
-      $('#m-sketch', c).classList.toggle('primary', this.sketchMode);
-      toast(this.sketchMode ? '✏️ 草图模式：在地图上拖动画笔（黄色线条），画完可让 AI 按草图生成地形' : '已退出草图模式', 'info');
-    };
-    $('#m-sketch-undo', c).onclick = () => {
-      if (!this.sketch.length) { toast('没有可撤销的笔画', 'err'); return; }
-      this.sketch.pop();
-      this.draw();
-      this.saveSketch();
-    };
-    $('#m-sketch-clear', c).onclick = async () => {
-      if (!this.sketch.length) { toast('草图本来就是空的', 'info'); return; }
-      if (!(await confirmDlg('清空全部草图笔画？'))) return;
-      this.sketch = [];
-      this.draw();
-      this.saveSketch();
-    };
-    // 地图 AI 面板
     $('#m-ai-toggle', c).onclick = () => $('#map-ai').classList.toggle('open');
-    // 文字地图
-    $('#m-text', c).onclick = () => this.toggleTextView();
     $('#m-ai-close', c).onclick = () => $('#map-ai').classList.remove('open');
+    $('#mq-gen', c).onclick = () => this.aiGenTextMap();
+    $('#mq-clear', c).onclick = async () => {
+      if (!(await confirmDlg('清空地图 AI 的对话？（不影响文字地图）'))) return;
+      await dbPut('chat', { id: 'mapchat', messages: [] });
+      this.renderMapChat();
+    };
     const mSend = async () => {
       const inp = $('#map-chat-input', c);
       const text = inp.value.trim();
@@ -3078,661 +2959,24 @@ const MapPage = {
     };
     $('#map-chat-send', c).onclick = mSend;
     $('#map-chat-input', c).addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); mSend(); } });
-    $('#mq-clear', c).onclick = async () => {
-      if (!(await confirmDlg('清空地图 AI 的对话？（不影响写作页的 AI 对话）'))) return;
-      await dbPut('chat', { id: 'mapchat', messages: [] });
-      this.renderMapChat();
-    };
-    $('#mq-gen', c).onclick = () => this.genFromSketch();
-    // AI 生成底图 / 扩充大陆
-    $('#m-aiimg', c).onclick = () => this.aiGenerateBaseImage();
-    $('#m-expand', c).onclick = () => this.expandMap();
-    // 导入草图图片（相册/画图导出/拍照）
-    $('#m-img', c).onclick = () => this.importSketchImage();
-    $('#m-img-toggle', c).onclick = () => {
-      this.showSketchImage = !this.showSketchImage;
-      $('#m-img-toggle', c).classList.toggle('primary', this.showSketchImage);
-      this.draw();
-    };
-    $('#m-img-ai', c).onclick = () => this.analyzeSketchImage();
-    $('#m-newver', c).onclick = async () => {
-      const cur = this.getCur();
-      const label = await promptDlg('新建地图版本', 'v' + (this.map.versions.length + 1) + ' · ' + new Date().toLocaleDateString('zh-CN'), '版本名，如：天崩之战后');
-      if (!label) return;
-      const event = await promptDlg('这一版本发生了什么大事？', '', '如：主角与魔王对轰，青云山脉被轰成平原（此事件会记入改名历史）');
-      const v = {
-        id: uid(), label: label || ('v' + (this.map.versions.length + 1)),
-        event: event || '', time: Date.now(),
-        markers: JSON.parse(JSON.stringify(cur.markers)),
-        regions: JSON.parse(JSON.stringify(cur.regions)),
-        terrain: { ...cur.terrain }
-      };
-      this.map.versions.push(v);
-      this.map.current = this.map.versions.length - 1;
-      await this.saveMap();
-      await logAdd('地图', '新建版本「' + v.label + '」' + (event ? '，事件：' + event : ''));
-      toast('已创建新版本，可在此基础上修改', 'ok');
-      this.render();
-    };
-    // 画布交互
-    const cv = this.canvas;
-    cv.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const f = e.deltaY < 0 ? 1.15 : 0.87;
-      this.view.scale = Math.max(0.4, Math.min(6, this.view.scale * f));
-      this.draw();
-    }, { passive: false });
-    let pinch = null;
-    cv.addEventListener('pointerdown', (e) => {
-      const pos = this.toNorm(e);
-      // 草图模式优先（指针捕获保证笔画连续，笔/手指/鼠标落点一致）
-      if (this.sketchMode) {
-        cv.setPointerCapture(e.pointerId);
-        this.draggingSketch = { points: [pos], color: this.sketchColor };
-        this.sketch.push(this.draggingSketch);
-        this.draw();
-        return;
-      }
-      // 地点拖动优先
-      const hit = this.hitMarker(pos);
-      if (hit) { cv.setPointerCapture(e.pointerId); this.drag = { type: 'marker', marker: hit }; return; }
-      if (this.placing) {
-        this.addMarkerAt(pos);
-        return;
-      }
-      if (this.regionMode) {
-        this.regionPts.push(pos);
-        this.draw();
-        return;
-      }
-      cv.setPointerCapture(e.pointerId);
-      this.drag = { type: 'pan', sx: e.clientX, sy: e.clientY, ox: this.view.ox, oy: this.view.oy };
-    });
-    cv.addEventListener('pointermove', (e) => {
-      if (this.draggingSketch) {
-        const pos = this.toNorm(e);
-        this.draggingSketch.points.push(pos);
-        this.draw();
-        return;
-      }
-      if (!this.drag) return;
-      if (this.drag.type === 'marker') {
-        const pos = this.toNorm(e);
-        this.drag.marker.x = Math.max(0.02, Math.min(0.98, pos.x));
-        this.drag.marker.y = Math.max(0.02, Math.min(0.98, pos.y));
-        this.draw();
-      } else {
-        this.view.ox = this.drag.ox + (e.clientX - this.drag.sx);
-        this.view.oy = this.drag.oy + (e.clientY - this.drag.sy);
-        this.draw();
-      }
-    });
-    const endDrag = () => {
-      if (this.draggingSketch) {
-        this.saveSketch();
-        this.draggingSketch = null;
-      }
-      this.drag = null;
-    };
-    cv.addEventListener('pointerup', endDrag);
-    cv.addEventListener('pointerleave', endDrag);
-    cv.addEventListener('pointercancel', endDrag);
-    // 触摸双指缩放（简版：两根手指距离变化）
-    cv.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 2) {
-        pinch = { d: Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY), s: this.view.scale };
-      }
-    }, { passive: true });
-    cv.addEventListener('touchmove', (e) => {
-      if (e.touches.length === 2 && pinch) {
-        e.preventDefault();
-        const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-        this.view.scale = Math.max(0.4, Math.min(6, pinch.s * d / pinch.d));
-        this.draw();
-      }
-    }, { passive: false });
-    cv.addEventListener('touchend', () => { pinch = null; });
-    cv.addEventListener('click', (e) => {
-      const pos = this.toNorm(e);
-      const hit = this.hitMarker(pos);
-      if (hit) this.showPopup(hit, e);
-    });
-    // 自适应尺寸
-    new ResizeObserver(() => this.draw()).observe(this.stage);
   },
 
-  toNorm(e) {
-    const r = this.canvas.getBoundingClientRect();
-    const x = (e.clientX - r.left - this.view.ox) / (r.width * this.view.scale);
-    const y = (e.clientY - r.top - this.view.oy) / (r.height * this.view.scale);
-    return { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
-  },
+  async saveMap() { this.map.textMap = this.textMap; await dbPut('maps', this.map); },
 
-  hitMarker(pos) {
-    const cur = this.getCur();
-    for (let i = cur.markers.length - 1; i >= 0; i--) {
-      const m = cur.markers[i];
-      if (Math.abs(m.x - pos.x) < 0.035 && Math.abs(m.y - pos.y) < 0.05) return m;
-    }
-    return null;
-  },
-
-  async addMarkerAt(pos) {
-    const types = { '宗门': '🏯', '城市': '🏙️', '秘境': '✨', '战场': '⚔️', '其他': '📌' };
-    const type = await promptDlg('地点类型（宗门/城市/秘境/战场/其他）', this.placing || '宗门');
-    if (!type) return;
-    const name = await promptDlg('地点名称', '', '如：青云宗');
-    if (!name) return;
-    const desc = await promptDlg('简介（可选）', '', '一句话描述');
-    this.getCur().markers.push({
-      id: uid(), name, type: type.trim() || '其他', desc: desc || '',
-      x: pos.x, y: pos.y, renames: []
-    });
-    this.placing = null;
-    $('#m-marker', this.c).classList.remove('primary');
-    await this.saveMap();
-    await logAdd('地图', '添加地点「' + name + '」（' + this.getCur().label + '）');
-    this.draw();
-  },
-
-  showPopup(m, e) {
-    const cur = this.getCur();
-    const types = { '宗门': '🏯', '城市': '🏙️', '秘境': '✨', '战场': '⚔️', '其他': '📌' };
-    const p = this.pop;
-    p.innerHTML = '';
-    p.hidden = false;
-    p.appendChild(el('div', { style: 'font-weight:700;font-size:15px', text: (types[m.type] || '📌') + ' ' + m.name }));
-    if (m.desc) p.appendChild(el('div', { style: 'font-size:13px;margin-top:4px;line-height:1.6', text: m.desc }));
-    const hist = el('div', { style: 'font-size:12px;color:#8a7a6a;margin-top:6px;line-height:1.7' });
-    hist.appendChild(el('div', { text: '📜 名称历史：' }));
-    const history = [{ name: m.name, at: '当前版本', reason: '' }, ...(m.renames || []).slice().reverse()];
-    for (const h of history) hist.appendChild(el('div', { text: `· ${h.name}（${h.at}${h.reason ? '：' + h.reason : ''}）` }));
-    p.appendChild(hist);
-    const acts = el('div', { style: 'display:flex;gap:6px;margin-top:8px;flex-wrap:wrap' });
-    acts.appendChild(el('button', { class: 'btn small primary', text: '✏️ 改名（记入历史）', onclick: async () => {
-      const newName = await promptDlg('新名称', m.name);
-      if (!newName || newName === m.name) return;
-      const reason = await promptDlg('为什么改名？', '', '如：天崩之战被轰平');
-      m.renames = m.renames || [];
-      m.renames.push({ oldName: m.name, newName, reason: reason || '', at: cur.label + ' · ' + new Date().toLocaleDateString('zh-CN') });
-      m.name = newName;
-      await this.saveMap();
-      await logAdd('地图', '地点改名：「' + m.renames[m.renames.length - 1].oldName + '」→「' + newName + '」' + (reason ? '，原因：' + reason : ''));
-      toast('已改名并记录历史', 'ok');
-      p.hidden = true;
-      this.draw();
-    } }));
-    acts.appendChild(el('button', { class: 'btn small danger', text: '🗑 删除', onclick: async () => {
-      if (!(await confirmDlg('删除地点「' + m.name + '」？'))) return;
-      cur.markers = cur.markers.filter(x => x !== m);
-      await this.saveMap();
-      p.hidden = true;
-      this.draw();
-    } }));
-    acts.appendChild(el('button', { class: 'btn small', text: '✕', onclick: () => p.hidden = true }));
-    p.appendChild(acts);
-    // 定位弹窗
-    const rect = this.canvas.getBoundingClientRect();
-    const px = rect.left + (m.x * rect.width * this.view.scale + this.view.ox);
-    const py = rect.top + (m.y * rect.height * this.view.scale + this.view.oy);
-    p.style.left = Math.min(rect.width - 300, Math.max(8, px - rect.left - 140)) + 'px';
-    p.style.top = Math.min(rect.height - 320, Math.max(8, py - rect.top - 60)) + 'px';
-  },
-
-  async saveMap() { this.map.sketch = this.sketch; this.map.sketchImage = this.sketchImage; this.map.textMap = this.textMap; await dbPut('maps', this.map); },
-  async saveSketch() { await this.saveMap(); },
-
-  async render() {
-    const ver = this.getCur();
-    $('#m-ver-label', this.c).textContent = '版本：' + ver.label + (ver.event ? '（' + ver.event + '）' : '');
-    // 版本面板
-    const vl = $('#m-ver-list', this.c);
-    vl.innerHTML = '';
-    this.map.versions.forEach((v, i) => {
-      const item = el('div', {
-        class: 'version-item' + (i === this.map.current ? ' on' : ''),
-        onclick: async () => {
-          if (i !== this.map.current && !(await confirmDlg('切换到版本「' + v.label + '」？（切换后只能查看，编辑会作用于当前版本）'))) return;
-          this.map.current = i;
-          await this.saveMap();
-          this.render();
-        }
-      },
-        el('div', { text: v.label }),
-        v.event ? el('div', { class: 'ev', text: v.event }) : null,
-        el('div', { style: 'display:flex;gap:4px;margin-top:4px' },
-          el('button', { class: 'btn small', title: '编辑版本名/事件', text: '✏️', onclick: (e) => { e.stopPropagation(); this.editVersion(i); } }),
-          el('button', { class: 'btn small danger', title: '删除该版本', text: '🗑', onclick: (e) => { e.stopPropagation(); this.deleteVersion(i); } })
-        )
-      );
-      vl.appendChild(item);
-    });
-    $('#m-versions', this.c).hidden = false;
-    this.draw();
-  },
-
-  /* ✏️ 编辑版本：改名 / 改事件描述 */
-  async editVersion(i) {
-    const v = this.map.versions[i];
-    if (!v) return;
-    const labelInp = el('input', { class: 'input', value: v.label, style: 'width:100%' });
-    const eventInp = el('input', { class: 'input', value: v.event || '', style: 'width:100%', placeholder: '这一版本发生了什么（可留空）' });
-    const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
-      el('div', {}, el('div', { class: 'muted', text: '版本名' }), labelInp),
-      el('div', {}, el('div', { class: 'muted', text: '事件描述' }), eventInp)
-    );
-    const ok = await modal({ title: '✏️ 编辑版本', body, okText: '💾 保存', cancelText: '取消' });
-    if (!ok) return;
-    v.label = labelInp.value.trim() || v.label;
-    v.event = eventInp.value.trim();
-    await this.saveMap();
-    await logAdd('地图', '编辑版本「' + v.label + '」' + (v.event ? '，事件：' + v.event : ''));
-    toast('版本已更新', 'ok');
-    this.render();
-  },
-
-  /* 🗑 删除版本：保留有用的历史 */
-  async deleteVersion(i) {
-    const v = this.map.versions[i];
-    if (!v) return;
-    if (this.map.versions.length <= 1) { toast('至少需要保留一个版本', 'err'); return; }
-    if (!(await confirmDlg('删除版本「' + v.label + '」？' + (v.event ? '\n事件：' + v.event + '\n' : '') + '此操作不可恢复！'))) return;
-    this.map.versions.splice(i, 1);
-    if (this.map.current >= this.map.versions.length) this.map.current = this.map.versions.length - 1;
-    else if (this.map.current > i) this.map.current--;
-    await this.saveMap();
-    await logAdd('地图', '删除版本「' + v.label + '」（剩余 ' + this.map.versions.length + ' 个版本）');
-    toast('版本已删除', 'ok');
-    this.render();
-  },
-
-  /* ---------- 地图 AI 对话（与写作页对话相互独立） ---------- */
-  async mapContext() {
-    const ver = this.getCur();
-    const t = ver ? (ver.terrain || {}) : {};
-    const markers = ver ? ver.markers.map(m => `${m.name}(${m.type},位于${(m.x * 100).toFixed(0)}%横向,${(m.y * 100).toFixed(0)}%纵向)`) : [];
-    const regions = ver ? ver.regions.map(r => r.name) : [];
-    return [
-      `当前版本：${ver ? ver.label : '无'}${ver && ver.event ? '（' + ver.event + '）' : ''}`,
-      `地形参数：种子=${t.seed ?? 1} 大陆=${t.continents ?? 3} 山脉=${t.mountains ?? 0.5} 河流=${t.rivers ?? 6} 森林=${t.forests ?? 0.4}`,
-      `已有地点：${markers.length ? markers.join('；') : '（无）'}`,
-      `已有势力区域：${regions.length ? regions.join('、') : '（无）'}`,
-      `草图统计：${this.sketchStats()}`
-    ].join('\n');
-  },
-
-  sketchStats() {
-    if (!this.sketch.length) return '还没有画草图';
-    let minX = 1, minY = 1, maxX = 0, maxY = 0, pts = 0;
-    for (const s of this.sketch) for (const p of s.points) {
-      minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-      maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
-      pts++;
-    }
-    const w = maxX - minX, h = maxY - minY;
-    return `共${this.sketch.length}笔${pts}个点，覆盖区域：横向${(minX * 100).toFixed(0)}%~${(maxX * 100).toFixed(0)}%，纵向${(minY * 100).toFixed(0)}%~${(maxY * 100).toFixed(0)}%（${(w * 100).toFixed(0)}%宽×${(h * 100).toFixed(0)}%高），草图整体${w > h ? '偏横向' : w < h ? '偏纵向' : '接近方形'}，位置${minX < 0.3 ? '偏左' : minX > 0.6 ? '偏右' : '居中'}、${minY < 0.3 ? '偏上' : minY > 0.6 ? '偏下' : '居中'}`;
-  },
-
-  async mapChatAsk(text, meta = { kind: 'chat' }) {
-    if (this.mapBusy) return;
-    const chat = await dbGet('chat', 'mapchat') || { id: 'mapchat', messages: [] };
-    chat.messages.push({ role: 'user', content: text, ts: Date.now() });
-    await dbPut('chat', chat);
-    this.renderMapChat();
-    const ctx = await this.mapContext();
-    const sys = '你是小说世界地图规划师，熟悉奇幻/修仙/科幻等各类世界观的地理设计。' +
-      '根据用户描述与当前地图状态给出具体建议（大陆分布、地形、地点布局等），可以输出地形参数供用户手动调整。' +
-      '当前地图状态：\n' + ctx;
-    const hist = chat.messages.slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
-    this.mapBusy = true;
-    try {
-      const reply = await AI.chat([{ role: 'system', content: sys }, ...hist]);
-      chat.messages.push({ role: 'assistant', content: reply, ts: Date.now(), meta: { ...meta, reqText: text } });
-      await dbPut('chat', chat);
-      await logAdd('地图', '地图AI对话：' + text.slice(0, 30));
-    } catch (e) {
-      chat.messages.push({ role: 'assistant', content: '⚠️ ' + e.message, ts: Date.now(), meta: { err: true } });
-      await dbPut('chat', chat);
-      toast(e.message, 'err');
-    }
-    this.mapBusy = false;
-    this.renderMapChat();
-  },
-
-  /* 按草图生成地形：AI 读取草图统计 → 输出地形参数 → 应用 */
-  async genFromSketch() {
-    if (this.mapBusy) { toast('AI 正在处理中…', 'info'); return; }
-    if (!this.sketch.length) { toast('请先在地图上画草图（点「✏️ 画草图」后用笔画），再让 AI 按草图生成', 'err'); return; }
-    const chat = await dbGet('chat', 'mapchat') || { id: 'mapchat', messages: [] };
-    chat.messages.push({ role: 'user', content: '请根据我的草图生成地图地形。\n' + this.sketchStats(), ts: Date.now() });
-    await dbPut('chat', chat);
-    this.renderMapChat();
-    this.mapBusy = true;
-    try {
-      const ctx = await this.mapContext();
-      const data = await AI.json([
-        { role: 'system', content: '你是小说世界地图生成器。根据用户草图的覆盖区域与分布，输出最贴合草图的地形参数 JSON。\n当前地图状态：\n' + ctx },
-        { role: 'user', content: '输出：{"seed":正整数,"continents":1-6,"mountains":0.1-1,"rivers":0-15,"forests":0-0.8,"note":"一句设计说明"}' }
-      ]);
-      const v = this.getCur();
-      v.terrainType = 'proc';
-      v.terrain = this.applyTerrain({
-        seed: parseInt(data.seed) || undefined,
-        continents: parseInt(data.continents),
-        mountains: parseFloat(data.mountains),
-        rivers: parseInt(data.rivers),
-        forests: parseFloat(data.forests)
-      });
-      await this.saveMap();
-      this.draw();
-      chat.messages.push({ role: 'assistant', content: '🌍 已按草图生成地形：大陆' + v.terrain.continents + '块，山脉' + v.terrain.mountains + '，河流' + v.terrain.rivers + '条。\n' + (data.note || '') + '\n（参数已应用，可点「🌍 生成/重置地形」再微调）', ts: Date.now(), meta: { kind: 'mapgen' } });
-      await dbPut('chat', chat);
-      await logAdd('地图', 'AI 按草图生成地形（种子 ' + v.terrain.seed + '）');
-      this.renderMapChat();
-      toast('已按草图生成地形', 'ok');
-    } catch (e) {
-      chat.messages.push({ role: 'assistant', content: '⚠️ ' + e.message, ts: Date.now(), meta: { err: true } });
-      await dbPut('chat', chat);
-      toast(e.message, 'err');
-    }
-    this.mapBusy = false;
-    this.renderMapChat();
-  },
-
-  /* 统一的参数应用（带合法范围钳制） */
-  applyTerrain(p) {
-    return {
-      seed: parseInt(p.seed) || Math.floor(Math.random() * 1e9),
-      continents: Math.max(1, Math.min(6, parseInt(p.continents) || 3)),
-      mountains: Math.max(0.1, Math.min(1, parseFloat(p.mountains) || 0.5)),
-      rivers: Math.max(0, Math.min(15, parseInt(p.rivers) || 6)),
-      forests: Math.max(0, Math.min(0.8, parseFloat(p.forests) || 0.4))
-    };
-  },
-
-  /* 导入草图图片：压缩 → 存本地 → 作为半透明底图叠加 */
-  async importSketchImage() {
-    const f = await filePicker('image/*');
-    if (!f) return;
-    try {
-      const dataUrl = await compressImage(f);
-      this.sketchImage = { dataUrl, name: f.name };
-      this.showSketchImage = true;
-      this._sketchImgEl = null;
-      await this.saveMap();
-      await logAdd('地图', '导入草图图片「' + f.name + '」');
-      toast('草图图片已导入，作为半透明底图叠加在地图上', 'ok');
-      this.draw();
-    } catch (e) {
-      toast('导入失败：' + e.message, 'err');
-    }
-  },
-
-  /* AI 分析草图图片（需要支持图片的视觉模型）→ 生成地形 */
-  async analyzeSketchImage() {
-    if (!this.sketchImage) { toast('请先点「🖼️ 导入草图」导入一张草图图片', 'err'); return; }
-    if (this.mapBusy) return;
-    const chat = await dbGet('chat', 'mapchat') || { id: 'mapchat', messages: [] };
-    chat.messages.push({ role: 'user', content: '（附草图图片）请分析我的世界草图，识别大陆轮廓、山川河流与地点布局，并生成地形。', ts: Date.now() });
-    await dbPut('chat', chat);
-    this.renderMapChat();
-    this.mapBusy = true;
-    try {
-      const ctx = await this.mapContext();
-      const reply = await AI.chat([
-        { role: 'system', content: '你是小说世界地图规划师。分析用户提供的世界草图图片，识别大陆轮廓、山脉河流走向、地点分布，并输出地形参数。当前地图状态：\n' + ctx },
-        { role: 'user', content: [
-          { type: 'text', text: '请分析这张世界草图，输出：{"seed":正整数,"continents":1-6,"mountains":0.1-1,"rivers":0-15,"forests":0-0.8,"note":"设计说明","layout":"用两句话描述识别到的地理布局（哪边是海、山脉在哪、建议地点放哪）"}' },
-          { type: 'image_url', image_url: { url: this.sketchImage.dataUrl } }
-        ] }
-      ]);
-      const m = reply.match(/\{[\s\S]*\}/);
-      if (!m) throw new Error('AI 未返回可解析的 JSON');
-      const data = JSON.parse(m[0]);
-      const v = this.getCur();
-      v.terrainType = 'proc';
-      v.terrain = this.applyTerrain(data);
-      await this.saveMap();
-      this.draw();
-      chat.messages.push({
-        role: 'assistant',
-        content: '🖼️ 已分析草图并应用地形：大陆' + v.terrain.continents + '块，山脉' + v.terrain.mountains + '，河流' + v.terrain.rivers + '条。\n' + (data.layout ? '📐 ' + data.layout + '\n' : '') + (data.note || ''),
-        ts: Date.now(), meta: { kind: 'mapgen' }
-      });
-      await dbPut('chat', chat);
-      await logAdd('地图', 'AI 分析草图图片并生成地形');
-      this.renderMapChat();
-      toast('已按草图图片生成地形', 'ok');
-    } catch (e) {
-      const tip = String(e.message).includes('400') ? '（当前模型可能不支持图片，可在设置里换成视觉模型，如 qwen-vl-plus / glm-4v / gpt-4o）' : '';
-      chat.messages.push({ role: 'assistant', content: '⚠️ ' + e.message + tip, ts: Date.now(), meta: { err: true } });
-      await dbPut('chat', chat);
-      toast(e.message, 'err');
-    }
-    this.mapBusy = false;
-    this.renderMapChat();
-  },
-
-  /* 布局描述：把当前地点/区域/对话转成文字布局（供 AI 组装绘图提示词） */
-  layoutDescription() {
-    const ver = this.getCur();
-    if (!ver) return '（还没有任何地点标记）';
-    const pos = (x, y) => {
-      const hz = x < 0.33 ? '西部' : x < 0.66 ? '中部' : '东部';
-      const vt = y < 0.33 ? '北部' : y < 0.66 ? '中部' : '南部';
-      return hz + (vt === '中部' && hz === '中部' ? '' : vt === '中部' ? '偏' + hz.slice(0, 1) : vt);
-    };
-    const lines = ver.markers.map(m => `「${m.name}」位于${pos(m.x, m.y)}${m.desc ? '（' + m.desc + '）' : ''}`);
-    const regs = ver.regions.map(r => `势力「${r.name}」的领地位于中部偏${r.points[0] ? pos(r.points[0].x, r.points[0].y) : '中'}`);
-    return (lines.length ? lines.join('；') : '还没有地点标记') + (regs.length ? '；' + regs.join('；') : '');
-  },
-
-  /* 🎨 AI 生成底图：对话/草图描述 → LLM 组装提示词 → 文生图 → 预览 → 确认导入 */
-  async aiGenerateBaseImage() {
-    if (this.mapBusy) { toast('AI 正在处理中…', 'info'); return; }
-    const ver = this.getCur();
-    if (!ver) return;
-    // 1. 收集用户描述 + 风格选择
-    const styleSel = el('select', { class: 'input' });
-    const STYLES = [
-      ['real', '🗺 复古信息地图（亚洲地图式：浅色底、山脉河流湖泊、图例、罗盘、卷轴标题）'],
-      ['anime', '🎨 动漫奇幻风（色彩鲜明、手绘幻想感）'],
-      ['ink', '🖌 水墨国风（宣纸质感、留白、淡彩）'],
-      ['parch', '📜 羊皮纸手绘风（复古羊皮纸、手绘线条）']
-    ];
-    for (const [v, t] of STYLES) styleSel.appendChild(el('option', { value: v, text: t }));
-    const desc = el('textarea', { class: 'input', style: 'width:100%;min-height:70px', placeholder: '描述你想要的地图布局/细节（如：东边是大海，中部大山脉，西北雪山…可留空按现有地点布局生成）' });
-    const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
-      el('div', {}, el('div', { class: 'muted', text: '地图风格' }), styleSel),
-      el('div', {}, el('div', { class: 'muted', text: '布局描述' }), desc)
-    );
-    const ok = await modal({ title: '🎨 AI 生成地图底图', body, okText: '🎨 生成', cancelText: '取消' });
-    if (!ok) return;
-    const want = desc.value.trim();
-    const style = styleSel.value;
-    const chat = await dbGet('chat', 'mapchat') || { id: 'mapchat', messages: [] };
-    const recent = chat.messages.slice(-6).filter(m => m.role === 'user').map(m => m.content).join('；');
-    const STYLE_DESC = {
-      real: '复古信息地图风格，类似精美的纸质地图册插画：浅米色纸面底、清晰的国界/区域边界线、山脉用棕色锯齿线、河流湖泊蓝色、森林绿色点缀、含图例与罗盘、卷轴式标题横幅',
-      anime: '动漫奇幻世界地图插画风格：色彩鲜明精致、手绘幻想感、充满冒险气息',
-      ink: '中国传统水墨国风地图：宣纸质感、留白、墨色山脉淡彩晕染、意境悠远',
-      parch: '复古羊皮纸手绘地图：羊皮纸质感底色、手绘线条、探险古地图的韵味'
-    };
-    this.mapBusy = true;
-    toast('🎨 AI 正在组装提示词并绘图，请稍候…（约 10~30 秒）', 'info');
-    try {
-      // 2. LLM 组装绘图提示词（带入地点布局 + 用户描述 + 对话 + 风格）
-      const ctx = await this.mapContext();
-      const prompt = await AI.chat([
-        { role: 'system', content: '你是地图插画提示词工程师。根据地点布局与用户描述，生成一段高质量的「地图插画」文生图提示词。\n风格要求：' + STYLE_DESC[style] + '\n要求：整体俯瞰视角、色彩鲜明精致、地理要素清晰（陆地海洋山脉河流都要表现）；不要绘制任何文字或标签（地名由应用层叠加，画文字会乱码）；把每个地点按方位写进画面描述。直接输出提示词正文，不要解释。' },
-        { role: 'user', content: '当前地图布局：\n' + this.layoutDescription() + '\n\n版本事件：' + (ver.event || '无') + '\n用户描述：' + (want || '（无，按布局自由发挥）') + '\n对话背景：' + (recent || '（无）') }
-      ]);
-      // 3. 文生图
-      const dataUrl = await AI.genImage(prompt.trim());
-      // 4. 预览确认
-      const imgEl = el('img', { src: dataUrl, style: 'width:100%;border-radius:10px;display:block' });
-      const hint = el('div', { class: 'muted', style: 'margin-top:8px;line-height:1.7', text: '满意就「导入为底图」（建议新建版本），不满意点「换一张」重新生成。' });
-      const body = el('div', {}, imgEl, hint);
-      let decision = await modal({
-        title: '🎨 AI 地图底图预览',
-        body,
-        okText: '✅ 导入为底图',
-        cancelText: '🔄 换一张',
-        okClass: 'primary'
-      });
-      if (decision === null) { this.mapBusy = false; return; } // 点 ✕
-      if (!decision) {
-        // 换一张：重新调用
-        this.mapBusy = false;
-        await this.aiGenerateBaseImage();
-        return;
-      }
-      // 5. 导入：建议新建版本
-      const mkVer = await modal({
-        title: '导入底图',
-        body: `<p style="line-height:1.7">底图导入后，现有地点标记/势力区域/版本历史都会保留。<br>建议<b>新建版本</b>记录这次地图更迭。</p>`,
-        okText: '📸 新建版本并导入',
-        cancelText: '直接替换当前底图'
-      });
-      if (mkVer) {
-        const label = await promptDlg('版本名', 'v' + (this.map.versions.length + 1) + ' · AI底图', '版本名');
-        const event = await promptDlg('这一版本发生了什么？', '', '如：天工造物，世界以新貌呈现（可留空）');
-        const v = {
-          id: uid(), label: label || ('v' + (this.map.versions.length + 1)),
-          event: event || 'AI 生成新底图', time: Date.now(),
-          markers: JSON.parse(JSON.stringify(ver.markers)),
-          regions: JSON.parse(JSON.stringify(ver.regions)),
-          terrain: { ...ver.terrain },
-          terrainType: 'image',
-          imageData: { dataUrl, prompt: prompt.trim() }
-        };
-        this.map.versions.push(v);
-        this.map.current = this.map.versions.length - 1;
-      } else {
-        ver.terrainType = 'image';
-        ver.imageData = { dataUrl, prompt: prompt.trim() };
-      }
-      await this.saveMap();
-      await logAdd('地图', 'AI 生成动漫底图并导入（' + (mkVer ? '新建版本' : '替换当前底图') + '）');
-      this.render();
-      this.renderMapChat();
-      toast('底图已导入，可继续添加地点/势力区域', 'ok');
-    } catch (e) {
-      toast('生成失败：' + e.message, 'err');
-    }
-    this.mapBusy = false;
-  },
-
-  /* ➕ 扩充大陆：在现有地图右侧/下方追加海域+新大陆，旧内容与标记保持原位 */
-  async expandMap() {
-    const ver = this.getCur();
-    if (!ver) return;
-    if (ver.terrainType === 'image') { toast('AI 底图模式下暂不支持扩充，可先切回「🌍 生成/重置地形」', 'err'); return; }
-    const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' });
-    const dirSel = el('select', { class: 'input' });
-    dirSel.appendChild(el('option', { value: 'right', text: '向右扩充（新大陆在右侧，中间大海隔开）' }));
-    dirSel.appendChild(el('option', { value: 'down', text: '向下扩充（新大陆在下方，中间大海隔开）' }));
-    body.appendChild(el('div', {}, el('div', { class: 'muted', text: '扩充方向' }), dirSel));
-    const ok = await modal({ title: '➕ 扩充大陆', body, okText: '扩充', cancelText: '取消' });
-    if (!ok) return;
-    this.mapBusy = true;
-    try {
-      const t = ver.terrain || { seed: 1, continents: 3, mountains: 0.5, rivers: 6, forests: 0.4 };
-      const oldW = t.W || this.W, oldH = t.H || this.H;
-      const oldHm = t.heightmap ? this.decodeHeightmap(t.heightmap) : null;
-      const newW = dirSel.value === 'right' ? Math.round(oldW * 1.6) : oldW;
-      const newH = dirSel.value === 'down' ? Math.round(oldH * 1.6) : oldH;
-      const h = new Float32Array(newW * newH);
-      // 1) 复制旧区域（保持左上原位）
-      if (oldHm) {
-        for (let y = 0; y < oldH; y++) for (let x = 0; x < oldW; x++) h[y * newW + x] = oldHm[y * oldW + x] / 255;
-      } else {
-        const old = this.genTerrain(t).h;
-        for (let y = 0; y < oldH; y++) for (let x = 0; x < oldW; x++) h[y * newW + x] = old[y * oldW + x];
-      }
-      // 2) 新区域：海洋 + 新大陆（独立噪声，中间留海带）
-      Noise.seed((t.seed || 1) ^ 0xabcdef);
-      const gap = Math.round(Math.min(oldW, oldH) * 0.08); // 与旧大陆之间的海带宽度
-      const x0 = dirSel.value === 'right' ? oldW + gap : 0;
-      const y0 = dirSel.value === 'down' ? oldH + gap : 0;
-      const cw = newW - x0, ch = newH - y0;
-      for (let y = y0; y < newH; y++) {
-        for (let x = x0; x < newW; x++) {
-          const nx = (x - x0) / cw - 0.5, ny = (y - y0) / ch - 0.5;
-          const dist = Math.sqrt(nx * nx + ny * ny) / 0.62;
-          let e = Noise.fbm(x * 0.016 + 100, y * 0.016 + 100, 5) * 0.75 + 0.2 * Math.cos(Math.atan2(ny, nx) * 2 + 5);
-          e -= dist * dist * 1.2;
-          h[y * newW + x] = e;
-        }
-      }
-      // 3) 标记/区域坐标重新归一化（保持屏幕相对位置）
-      const fx = (vx) => vx * (oldW / newW);
-      const fy = (vy) => vy * (oldH / newH);
-      for (const m of ver.markers) { m.x = fx(m.x); m.y = fy(m.y); }
-      for (const r of ver.regions) for (const p of r.points) { p.x = fx(p.x); p.y = fy(p.y); }
-      // 4) 保存为新版本
-      const label = await promptDlg('版本名', 'v' + (this.map.versions.length + 1) + ' · 扩充新大陆', '版本名');
-      if (label === null) { this.mapBusy = false; return; }
-      const event = await promptDlg('新大陆上发生了什么/叫什么？', '', '如：远渡重洋发现新大陆（可留空）');
-      const v = {
-        id: uid(), label: label || ('v' + (this.map.versions.length + 1)),
-        event: event || '扩充新大陆', time: Date.now(),
-        markers: JSON.parse(JSON.stringify(ver.markers)),
-        regions: JSON.parse(JSON.stringify(ver.regions)),
-        terrain: {
-          seed: t.seed, continents: t.continents, mountains: t.mountains,
-          rivers: t.rivers, forests: t.forests,
-          W: newW, H: newH, heightmap: this.encodeHeightmap(h)
-        },
-        terrainType: 'proc'
-      };
-      this.map.versions.push(v);
-      this.map.current = this.map.versions.length - 1;
-      await this.saveMap();
-      await logAdd('地图', '扩充大陆（' + dirSel.value + '，' + oldW + '×' + oldH + ' → ' + newW + '×' + newH + '）');
-      this.render();
-      toast('已扩充：新大陆已加入，中间大海隔开', 'ok');
-    } catch (e) {
-      toast('扩充失败：' + e.message, 'err');
-    }
-    this.mapBusy = false;
-  },
-
-  /* ===== 文字地图：按方位分区的区域清单（国家/州/山脉/蛮荒…），可手写或 AI 生成 ===== */
-  ZONES: ['北方', '东北', '东方', '东南', '南方', '西南', '西方', '西北', '中央'],
-  TYPE_ICONS: { '国家': '🏰', '州郡': '🏯', '城市': '🏙️', '山脉': '⛰️', '河流': '🏞️', '湖泊': '🏝️', '蛮荒': '🌲', '秘境': '✨', '战场': '⚔️', '水域': '🌊', '其他': '📌' },
-  ZONE_POS: { '北方': [0.5, 0.12], '东北': [0.85, 0.15], '东方': [0.88, 0.5], '东南': [0.85, 0.85], '南方': [0.5, 0.88], '西南': [0.15, 0.85], '西方': [0.12, 0.5], '西北': [0.15, 0.15], '中央': [0.5, 0.5] },
-
-  async toggleTextView() {
-    this.textView = !this.textView;
-    const btn = $('#m-text', this.c);
-    btn.classList.toggle('primary', this.textView);
-    btn.textContent = this.textView ? '🗺️ 图形视图' : '📝 文字地图';
-    if (this.textView) this.renderTextView();
-    else this.render();
-  },
-
-  async renderTextView() {
+  /* ===== 文字地图 ===== */
+  renderTextView() {
     const view = $('#m-text-view', this.c);
-    const canvas = this.canvas;
-    view.hidden = false;
-    canvas.style.display = 'none';
+    if (!view) return;
     view.innerHTML = '';
-    view.appendChild(el('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap' },
-      el('b', { text: '📝 文字地图' }),
-      el('span', { class: 'muted', text: '按方位分区的区域清单，可手写，可让 AI 生成' }),
-      el('div', { class: 'spacer', style: 'flex:1' }),
-      el('button', { class: 'btn small primary', text: '＋ 新增区域', onclick: () => this.addTextItem() }),
-      el('button', { class: 'btn small', text: '🤖 AI 生成', onclick: () => this.aiGenTextMap() }),
-      el('button', { class: 'btn small', text: '🗺️ 应用到图形地图', onclick: () => this.applyTextToGraph() })
-    ));
-    if (!this.textMap.items.length) {
-      view.appendChild(el('div', { class: 'empty-tip', text: '还没有文字地图条目。\n· 点「＋ 新增区域」手写（如：齐国·国家·东方·中原大国）\n· 或「🤖 AI 生成」让 AI 根据当前地图/设定生成整套区域' }));
+    const items = this.textMap.items || [];
+    $('#m-count', this.c).textContent = items.length ? items.length + ' 个区域' : '';
+    if (!items.length) {
+      view.appendChild(el('div', { class: 'empty-tip', text: '还没有文字地图区域。\n· 点「＋ 新增区域」手写（如：齐国 · 国家 · 东方 · 中原大国）\n· 或「🤖 AI 生成」让 AI 根据你的世界观设定 + 势力结构（魏国→州郡→城市）自动生成整套区域，逐条确认采纳' }));
       return;
     }
     const groups = {};
-    for (const z of this.ZONES) groups[z] = this.textMap.items.filter(i => i.zone === z);
-    const others = this.textMap.items.filter(i => !this.ZONES.includes(i.zone));
+    for (const z of this.ZONES) groups[z] = items.filter(i => i.zone === z);
+    const others = items.filter(i => !this.ZONES.includes(i.zone));
     for (const z of this.ZONES) {
       if (!groups[z].length) continue;
       view.appendChild(el('h4', { text: '▸ ' + z }));
@@ -3749,9 +2993,11 @@ const MapPage = {
     view.appendChild(el('div', { class: 'zone-card' },
       el('span', { class: 't', text: icon + ' ' + it.name }),
       el('span', { class: 'tag', text: it.type || '区域' }),
+      it.belong ? el('span', { class: 'tag belong', text: '🏮 属 ' + it.belong }) : null,
       el('span', { class: 'd', text: it.desc || '（无描述）' }),
       el('button', { class: 'btn small', text: '✏️', onclick: () => this.editTextItem(it) }),
       el('button', { class: 'btn small danger', text: '🗑', onclick: async () => {
+        if (!(await confirmDlg('删除区域「' + it.name + '」？'))) return;
         this.textMap.items = this.textMap.items.filter(x => x !== it);
         await this.saveMap();
         this.renderTextView();
@@ -3765,18 +3011,20 @@ const MapPage = {
     for (const t of Object.keys(this.TYPE_ICONS)) typeSel.appendChild(el('option', { value: t, text: t }));
     const zoneSel = el('select', { class: 'input', style: 'width:100%' });
     for (const z of this.ZONES) zoneSel.appendChild(el('option', { value: z, text: z }));
+    const belongInp = el('input', { class: 'input', style: 'width:100%', placeholder: '归属势力/上级（可选），如：魏国' });
     const descInp = el('textarea', { class: 'input', style: 'width:100%;min-height:60px', placeholder: '描述：位置关系/势力归属/特点…' });
     const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
       el('div', {}, el('div', { class: 'muted', text: '名称' }), nameInp),
       el('div', {}, el('div', { class: 'muted', text: '类型' }), typeSel),
       el('div', {}, el('div', { class: 'muted', text: '方位' }), zoneSel),
+      el('div', {}, el('div', { class: 'muted', text: '归属' }), belongInp),
       el('div', {}, el('div', { class: 'muted', text: '描述' }), descInp)
     );
     const ok = await modal({ title: '➕ 新增文字地图区域', body, okText: '保存', cancelText: '取消' });
     if (!ok) return;
     const name = nameInp.value.trim();
     if (!name) { toast('请填写名称', 'err'); return; }
-    this.textMap.items.push({ id: uid(), name, type: typeSel.value, zone: zoneSel.value, desc: descInp.value.trim() });
+    this.textMap.items.push({ id: uid(), name, type: typeSel.value, zone: zoneSel.value, belong: belongInp.value.trim(), desc: descInp.value.trim() });
     await this.saveMap();
     await logAdd('地图', '文字地图新增「' + name + '」');
     this.renderTextView();
@@ -3788,11 +3036,13 @@ const MapPage = {
     for (const t of Object.keys(this.TYPE_ICONS)) typeSel.appendChild(el('option', { value: t, text: t, selected: it.type === t ? 'selected' : null }));
     const zoneSel = el('select', { class: 'input', style: 'width:100%' });
     for (const z of this.ZONES) zoneSel.appendChild(el('option', { value: z, text: z, selected: it.zone === z ? 'selected' : null }));
+    const belongInp = el('input', { class: 'input', style: 'width:100%', value: it.belong || '', placeholder: '归属势力/上级（可选）' });
     const descInp = el('textarea', { class: 'input', style: 'width:100%;min-height:60px', html: esc(it.desc || '') });
     const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
       el('div', {}, el('div', { class: 'muted', text: '名称' }), nameInp),
       el('div', {}, el('div', { class: 'muted', text: '类型' }), typeSel),
       el('div', {}, el('div', { class: 'muted', text: '方位' }), zoneSel),
+      el('div', {}, el('div', { class: 'muted', text: '归属' }), belongInp),
       el('div', {}, el('div', { class: 'muted', text: '描述' }), descInp)
     );
     const ok = await modal({ title: '✏️ 编辑区域', body, okText: '保存', cancelText: '取消' });
@@ -3800,29 +3050,35 @@ const MapPage = {
     it.name = nameInp.value.trim() || it.name;
     it.type = typeSel.value;
     it.zone = zoneSel.value;
+    it.belong = belongInp.value.trim();
     it.desc = descInp.value.trim();
     await this.saveMap();
     this.renderTextView();
   },
 
-  /* 🤖 AI 生成文字地图：根据当前图形地图+势力+世界观生成区域清单 → 逐条确认采纳 */
+  /* 🤖 AI 生成文字地图：根据世界观设定 + 势力结构 + 地图AI对话 → 区域清单 → 逐条确认采纳 */
   async aiGenTextMap() {
     if (this.mapBusy) { toast('AI 处理中…', 'info'); return; }
-    const ver = this.getCur();
-    const ctx = await this.mapContext();
-    const tree = (await dbGet('sect', 'tree')) || { nodes: [] };
     const world = await dbGet('world', 'world');
-    const worldBrief = world && world.items.length ? world.items.slice(0, 8).map(i => `[${i.category}] ${i.title}：${(i.content || '').slice(0, 60)}`).join('\n') : '（暂无）';
+    const tree = (await dbGet('sect', 'tree')) || { nodes: [] };
+    const chat = await dbGet('chat', 'mapchat') || { id: 'mapchat', messages: [] };
+    const worldItems = (world && world.items) || [];
+    const worldBrief = worldItems.length
+      ? worldItems.map(i => `[${i.category}] ${i.title}${i.parent ? '（上级：' + i.parent + '）' : ''}：${(i.content || '').slice(0, 120)}`).join('\n')
+      : '（暂无）';
+    const treeBrief = this.treeLines(tree);
+    const existing = this.textMap.items.length ? this.textMap.items.map(i => i.name + (i.belong ? '(' + i.belong + ')' : '')).join('、') : '（无）';
+    const chatTail = chat.messages.slice(-6).filter(m => m.role === 'user').map(m => m.content).join('；') || '（无）';
     this.mapBusy = true;
-    toast('🤖 AI 正在生成文字地图…', 'info');
+    toast('🤖 AI 正在根据世界观生成文字地图…', 'info');
     try {
       const data = await AI.json([
-        { role: 'system', content: '你是小说世界地理规划师。根据当前地图地点、势力与世界观，生成一套文字地图区域清单（像手绘示意图那样：国家、州郡、城市、山脉、河流、蛮荒等分区，按方位布置）。要求：与已有地点/势力自洽，方位要明确。只输出 JSON。\n当前势力：' + (tree.nodes.map(n => n.name).join('、') || '无') + '\n世界观：\n' + worldBrief },
-        { role: 'user', content: '当前地图：\n' + ctx + '\n输出：{"items":[{"name":"区域名","type":"国家|州郡|城市|山脉|河流|湖泊|蛮荒|秘境|战场|水域|其他","zone":"北方|东北|东方|东南|南方|西南|西方|西北|中央","desc":"描述(位置/归属/特点)"}]}，6~12 条。' }
+        { role: 'system', content: '你是小说世界地理规划师。根据世界观设定与势力结构生成一套文字地图区域清单（国家、州郡、城市、山脉、河流等，按方位布置）。要求：1) 势力层级要体现：如果世界观里有「魏国→兖州→许都」这种结构，生成的区域要带 belong 归属（如许都 belong=兖州，兖州 belong=魏国）；2) 与已有设定自洽，不凭空发明冲突设定；3) 每个区域的方位 zone 要明确。只输出 JSON。\n【世界观设定】\n' + worldBrief + '\n【势力结构】\n' + treeBrief },
+        { role: 'user', content: '现有区域：' + existing + '\n地图AI对话：' + chatTail + '\n输出：{"items":[{"name":"区域名","type":"国家|州郡|城市|山脉|河流|湖泊|蛮荒|秘境|战场|水域|其他","zone":"北方|东北|东方|东南|南方|西南|西方|西北|中央","belong":"归属势力/上级（可选，无则空）","desc":"描述(位置/归属/特点)"}]}，6~12 条。' }
       ]);
       const items = (data.items || []).filter(i => i && i.name);
       if (!items.length) { toast('未生成有效区域', 'err'); return; }
-      // 确认面板
+      // 确认面板：逐条采纳（自动去重）
       const pending = items.slice();
       const body = el('div', {});
       const renderList = () => {
@@ -3833,11 +3089,13 @@ const MapPage = {
           left++;
           body.appendChild(el('div', { style: 'display:flex;gap:8px;align-items:flex-start;padding:8px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;flex-wrap:wrap;background:var(--bg)' },
             el('div', { style: 'flex:1;min-width:160px' },
-              el('div', { style: 'font-weight:700;font-size:13px', text: (this.TYPE_ICONS[it.type] || '📌') + ' ' + it.name + '（' + (it.zone || '中央') + '）' }),
+              el('div', { style: 'font-weight:700;font-size:13px', text: (this.TYPE_ICONS[it.type] || '📌') + ' ' + it.name + '（' + (it.zone || '中央') + '）' + (it.belong ? ' · 🏮属 ' + it.belong : '') }),
               el('div', { style: 'font-size:13px;line-height:1.6;margin-top:4px', text: it.desc || '' })
             ),
             el('button', { class: 'btn small primary', text: '✅ 采纳', onclick: async () => {
-              this.textMap.items.push({ id: uid(), name: it.name, type: it.type || '其他', zone: it.zone || '中央', desc: it.desc || '' });
+              if (!this.textMap.items.some(x => x.name === it.name)) {
+                this.textMap.items.push({ id: uid(), name: it.name, type: it.type || '其他', zone: it.zone || '中央', belong: it.belong || '', desc: it.desc || '' });
+              }
               it._gone = true;
               renderList();
             } }),
@@ -3860,26 +3118,63 @@ const MapPage = {
     this.mapBusy = false;
   },
 
-  /* 🗺️ 应用到图形地图：文字条目 → 图形地点标记（按方位换算坐标） */
-  async applyTextToGraph() {
-    if (!this.textMap.items.length) { toast('文字地图还没有条目', 'err'); return; }
-    const ver = this.getCur();
-    let added = 0;
-    for (const it of this.textMap.items) {
-      if (ver.markers.some(m => m.name === it.name)) continue;
-      const pos = this.ZONE_POS[it.zone] || [0.5, 0.5];
-      ver.markers.push({
-        id: uid(), name: it.name, type: it.type === '州郡' || it.type === '国家' ? '宗门' : it.type === '城市' ? '城市' : it.type === '秘境' ? '秘境' : it.type === '战场' ? '战场' : '其他',
-        desc: it.desc || '', x: pos[0] + (Math.random() - 0.5) * 0.04, y: pos[1] + (Math.random() - 0.5) * 0.04, renames: []
-      });
-      added++;
+  /* 势力树 → 缩进文本（供 AI 理解层级） */
+  treeLines(tree) {
+    const nodes = (tree && tree.nodes) || [];
+    if (!nodes.length) return '（暂无势力结构）';
+    const childrenOf = {};
+    for (const n of nodes) (childrenOf[n.parentId || 'root'] = childrenOf[n.parentId || 'root'] || []).push(n);
+    const lines = [];
+    const walk = (id, depth) => {
+      for (const n of (childrenOf[id] || [])) {
+        lines.push('  '.repeat(depth) + '- ' + n.name + (n.role ? '（' + n.role + '）' : ''));
+        walk(n.id, depth + 1);
+      }
+    };
+    walk('root', 0);
+    return lines.length ? lines.join('\n') : '（暂无势力结构）';
+  },
+
+  /* ===== 地图 AI 对话（与写作页对话相互独立）===== */
+  async mapContext() {
+    const items = this.textMap.items || [];
+    const world = await dbGet('world', 'world');
+    const worldBrief = (world && world.items && world.items.length)
+      ? world.items.slice(0, 15).map(i => `[${i.category}] ${i.title}：${(i.content || '').slice(0, 60)}`).join('\n')
+      : '（暂无）';
+    const tree = (await dbGet('sect', 'tree')) || { nodes: [] };
+    return [
+      `现有文字地图区域（${items.length} 个）：${items.length ? items.map(i => `${i.name}(${i.type},${i.zone}${i.belong ? ',属' + i.belong : ''})`).join('；') : '（无）'}`,
+      `势力结构：${this.treeLines(tree).replace(/\n/g, ' / ')}`,
+      `世界观设定：\n${worldBrief}`
+    ].join('\n');
+  },
+
+  async mapChatAsk(text, meta = { kind: 'chat' }) {
+    if (this.mapBusy) return;
+    const chat = await dbGet('chat', 'mapchat') || { id: 'mapchat', messages: [] };
+    chat.messages.push({ role: 'user', content: text, ts: Date.now() });
+    await dbPut('chat', chat);
+    this.renderMapChat();
+    const ctx = await this.mapContext();
+    const sys = '你是小说世界地理规划师，熟悉奇幻/修仙/科幻等各类世界观的地理设计。' +
+      '根据用户描述、文字地图现状、世界观设定与势力结构给出具体建议（国家/州郡/城市/山脉河流的方位布局等），' +
+      '生成区域建议时可以给出文字地图条目（名称/类型/方位/归属/描述），用户确认后可采纳。' +
+      '当前地图状态：\n' + ctx;
+    const hist = chat.messages.slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+    this.mapBusy = true;
+    try {
+      const reply = await AI.chat([{ role: 'system', content: sys }, ...hist]);
+      chat.messages.push({ role: 'assistant', content: reply, ts: Date.now(), meta: { ...meta, reqText: text } });
+      await dbPut('chat', chat);
+      await logAdd('地图', '地图AI对话：' + text.slice(0, 30));
+    } catch (e) {
+      chat.messages.push({ role: 'assistant', content: '⚠️ ' + e.message, ts: Date.now(), meta: { err: true } });
+      await dbPut('chat', chat);
+      toast(e.message, 'err');
     }
-    if (!added) { toast('文字条目都已在地图上', 'info'); return; }
-    await this.saveMap();
-    await logAdd('地图', '文字地图应用到图形：新增 ' + added + ' 个地点');
-    toast('已按文字地图生成 ' + added + ' 个地点标记', 'ok');
-    this.toggleTextView();
-    this.render();
+    this.mapBusy = false;
+    this.renderMapChat();
   },
 
   async renderMapChat() {
@@ -3888,7 +3183,7 @@ const MapPage = {
     if (!box) return;
     box.innerHTML = '';
     if (!chat.messages.length) {
-      box.innerHTML = '<div class="empty-tip">和地图 AI 聊你的世界构想：<br>· 描述地理（"东边是海，中部大山脉"）<br>· 让它规划大陆和地点<br>· 先点「✏️ 画草图」涂几笔 → 「🌍 按草图生成地形」</div>';
+      box.innerHTML = '<div class="empty-tip">和地图 AI 聊你的世界地理：<br>· 描述布局（"东边是大海，中部大山脉，北方魏国"）<br>· 让它规划国家/州郡/城市的方位<br>· 或直接点「🤖 生成文字地图」按世界观自动生成';
       return;
     }
     for (const m of chat.messages) {
@@ -3898,468 +3193,6 @@ const MapPage = {
       box.appendChild(div);
     }
     box.scrollTop = box.scrollHeight;
-  },
-
-  /* ---------- 地形生成与绘制 ---------- */
-
-  /* heightmap 编解码（Uint8 量化 → base64，用于版本持久化与扩充） */
-  encodeHeightmap(h) {
-    const arr = new Uint8Array(h.length);
-    for (let i = 0; i < h.length; i++) arr[i] = Math.max(0, Math.min(255, Math.round(h[i] * 255)));
-    let bin = '';
-    for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
-    return btoa(bin);
-  },
-  decodeHeightmap(b64) {
-    const bin = atob(b64);
-    const arr = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-    return arr;
-  },
-
-  /* 确定性随机（保证同一种子河流结果一致，扩充后重绘不变） */
-  mulberry32(seed) {
-    let a = seed >>> 0;
-    return () => {
-      a |= 0; a = (a + 0x6D2B79F5) | 0;
-      let t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  },
-
-  genTerrain(t) {
-    const W = t.W || this.W, H = t.H || this.H;
-    const waterLevel = 0.46;
-    let h;
-    if (t.heightmap) {
-      // 已有持久化高度图（扩充后的大画布）
-      const arr = this.decodeHeightmap(t.heightmap);
-      h = new Float32Array(W * H);
-      for (let i = 0; i < arr.length; i++) h[i] = arr[i] / 255;
-    } else {
-      // 程序化生成
-      Noise.seed(t.seed);
-      h = new Float32Array(W * H);
-      for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-          // 大陆遮罩：中心向外的衰减 + 噪声
-          const nx = x / W - 0.5, ny = y / H - 0.5;
-          const dist = Math.sqrt(nx * nx + ny * ny) / 0.62;
-          const continents = t.continents;
-          const ang = Math.atan2(ny, nx);
-          const ring = 0.25 * Math.cos(ang * continents + fbm2(x, y, 0.02) * 6);
-          let e = fbm2(x, y, 0.016, 5) * 0.75 + ring + 0.25 * noise2(x, y, 0.05);
-          e -= dist * dist * 1.15;
-          const m = fbm2(x, y, 0.055, 4) * t.mountains * 0.9;
-          e = e + m - m * 0.55;
-          h[y * W + x] = e;
-        }
-      }
-    }
-    // 河流（确定性随机起点，同 seed 结果一致；保存有序路径用于连续曲线绘制）
-    const rng = this.mulberry32((t.seed || 1) ^ 0x9e3779b9);
-    const riverCells = new Set();
-    const riverPaths = [];
-    for (let r = 0; r < (t.rivers || 6); r++) {
-      let x = 8 + Math.floor(rng() * (W - 16));
-      let y = 4 + Math.floor(rng() * (H - 40));
-      const path = [[x, y]];
-      let guard = 0;
-      while (guard++ < 400 && h[y * W + x] > waterLevel) {
-        riverCells.add(y * W + x);
-        let best = null, bv = h[y * W + x];
-        for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, 1]]) {
-          const nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-          if (h[ny * W + nx] < bv) { bv = h[ny * W + nx]; best = [nx, ny]; }
-        }
-        if (!best) break;
-        [x, y] = best;
-        path.push([x, y]);
-      }
-      if (path.length > 1) riverPaths.push(path);
-    }
-    return { h, waterLevel, riverCells, riverPaths, W, H };
-    function fbm2(x, y, f, oct = 4) { return Noise.fbm(x * f, y * f, oct); }
-    function noise2(x, y, f) { return Noise.noise2(x * f, y * f); }
-  },
-
-  /* 生成程序化地形离屏画布：高分辨率平滑着色 + 地图册质感（山体晕线/连续山脉带/蜿蜒河流/海岸线） */
-  renderTerrainOff(ver) {
-    const t = ver.terrain || { seed: 1, continents: 3, mountains: 0.5, rivers: 6, forests: 0.4 };
-    // 缓存：同一地形参数不重复生成
-    const key = [ver.id, t.seed, t.continents, t.mountains, t.rivers, t.forests, t.W, t.H].join(':');
-    if (this._terrainCache && this._terrainCache.key === key) return this._terrainCache.off;
-    const { h, waterLevel, riverCells, riverPaths, W, H } = this.genTerrain(t);
-    // 高分辨率输出（接近显示尺寸，消除放大块状感）
-    const SW = 720;
-    const SH = Math.max(480, Math.round(H / W * SW));
-    const off = document.createElement('canvas');
-    off.width = SW; off.height = SH;
-    const ctx = off.getContext('2d');
-    // 色标（按高度平滑渐变，仿地图册配色）
-    const STOPS = [
-      [0.00, [82, 118, 154]],
-      [0.32, [116, 154, 188]],
-      [0.42, [162, 190, 212]],
-      [0.455, [196, 212, 228]],
-      [0.485, [222, 210, 176]],
-      [0.55, [238, 230, 198]],
-      [0.62, [224, 210, 166]],
-      [0.72, [194, 164, 116]],
-      [0.84, [166, 134, 90]],
-      [1.00, [232, 228, 216]]
-    ];
-    const colorAt = (e) => {
-      e = Math.max(0, Math.min(1, e));
-      for (let i = 1; i < STOPS.length; i++) {
-        if (e <= STOPS[i][0]) {
-          const [e0, c0] = STOPS[i - 1], [e1, c1] = STOPS[i];
-          const k = (e - e0) / (e1 - e0 || 1);
-          return [Math.round(c0[0] + (c1[0] - c0[0]) * k), Math.round(c0[1] + (c1[1] - c0[1]) * k), Math.round(c0[2] + (c1[2] - c0[2]) * k)];
-        }
-      }
-      return STOPS[STOPS.length - 1][1];
-    };
-    // 逐像素双线性插值着色（陆地加水彩斑驳调制，避免纯色块感）
-    const img = ctx.createImageData(SW, SH);
-    const lerp = (a, b, k) => a + (b - a) * k;
-    // 低分辨率斑驳纹理（水彩不均匀感）
-    const speckle = new Float32Array(W * H);
-    Noise.seed((t.seed || 1) ^ 0x1234abcd);
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) speckle[y * W + x] = Noise.fbm(x * 0.06, y * 0.06, 3);
-    for (let py = 0; py < SH; py++) {
-      const fy = (py / (SH - 1)) * (H - 1);
-      const y0 = Math.floor(fy), y1 = Math.min(y0 + 1, H - 1), ty = fy - y0;
-      for (let px = 0; px < SW; px++) {
-        const fx = (px / (SW - 1)) * (W - 1);
-        const x0 = Math.floor(fx), x1 = Math.min(x0 + 1, W - 1), tx = fx - x0;
-        const e = lerp(lerp(h[y0 * W + x0], h[y0 * W + x1], tx), lerp(h[y1 * W + x0], h[y1 * W + x1], tx), ty);
-        const c = colorAt(e);
-        let r = c[0], g = c[1], b = c[2];
-        if (e > waterLevel + 0.02) {
-          const sp = lerp(lerp(speckle[y0 * W + x0], speckle[y0 * W + x1], tx), lerp(speckle[y1 * W + x0], speckle[y1 * W + x1], tx), ty);
-          const d = (sp - 0.5) * 16;
-          r += d; g += d; b += d;
-        }
-        const i = (py * SW + px) * 4;
-        img.data[i] = Math.max(0, Math.min(255, Math.round(r)));
-        img.data[i + 1] = Math.max(0, Math.min(255, Math.round(g)));
-        img.data[i + 2] = Math.max(0, Math.min(255, Math.round(b)));
-        img.data[i + 3] = 255;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-    const S = SW / W; // ≈4.5
-    // 山脉带：山脊格链式连接成连续折线（像地图册的山脉带）
-    const ridge = new Set();
-    for (let y = 1; y < H - 1; y++) {
-      for (let x = 1; x < W - 1; x++) {
-        const e = h[y * W + x];
-        if (e > 0.66) {
-          const up = h[(y - 1) * W + x], dn = h[(y + 1) * W + x], lt = h[y * W + x - 1], rt = h[y * W + x + 1];
-          if ((e >= up && e >= dn) || (e >= lt && e >= rt)) ridge.add(y * W + x);
-        }
-      }
-    }
-    const visited = new Set();
-    ctx.strokeStyle = 'rgba(124,92,54,0.8)';
-    ctx.lineWidth = 2.4;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    for (const start of ridge) {
-      if (visited.has(start)) continue;
-      const stack = [start];
-      visited.add(start);
-      const pts = [];
-      while (stack.length) {
-        const cur = stack.pop();
-        const cx = cur % W, cy = (cur / W) | 0;
-        pts.push([cx * S + S / 2, cy * S + S / 2]);
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
-          const nx = cx + dx, ny = cy + dy;
-          if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-          const ni = ny * W + nx;
-          if (ridge.has(ni) && !visited.has(ni)) { visited.add(ni); stack.push(ni); }
-        }
-      }
-      if (pts.length >= 2) {
-        // 中点法平滑折线为曲线
-        ctx.beginPath();
-        ctx.moveTo(pts[0][0], pts[0][1]);
-        for (let i = 1; i < pts.length - 1; i++) {
-          const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2;
-          ctx.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
-        }
-        ctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
-        ctx.stroke();
-      }
-    }
-    // 河流：每条河画成连续蜿蜒曲线
-    ctx.strokeStyle = 'rgba(86,150,188,0.95)';
-    ctx.lineWidth = 2.4;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    for (const path of riverPaths) {
-      if (path.length < 2) continue;
-      ctx.beginPath();
-      ctx.moveTo(path[0][0] * S + S / 2, path[0][1] * S + S / 2);
-      for (let i = 1; i < path.length; i++) ctx.lineTo(path[i][0] * S + S / 2, path[i][1] * S + S / 2);
-      ctx.stroke();
-    }
-    // 纸面噪点纹理（更淡）
-    const rng = this.mulberry32((t.seed || 1) ^ 0x9e37d4e8);
-    ctx.fillStyle = 'rgba(110,85,50,0.035)';
-    for (let i = 0; i < (SW * SH) / 160; i++) {
-      ctx.fillRect(Math.floor(rng() * SW), Math.floor(rng() * SH), 1, 1);
-    }
-    // 持久化 heightmap（供扩充/重绘）
-    if (!ver.terrain.heightmap || ver.terrain.W !== W || ver.terrain.H !== H) {
-      ver.terrain.heightmap = this.encodeHeightmap(h);
-      ver.terrain.W = W; ver.terrain.H = H;
-      this.saveMap();
-    }
-    this._terrainCache = { key, off };
-    return off;
-  },
-
-  /* 罗盘玫瑰（屏幕空间装饰） */
-  drawCompass(ctx, x, y, r) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.strokeStyle = 'rgba(80,60,35,0.55)';
-    ctx.fillStyle = 'rgba(80,60,35,0.55)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2); ctx.stroke();
-    for (let i = 0; i < 8; i++) {
-      const a = (i * Math.PI) / 4;
-      const tipX = Math.cos(a) * r, tipY = Math.sin(a) * r;
-      const bX = Math.cos(a + 0.2) * r * 0.6, bY = Math.sin(a + 0.2) * r * 0.6;
-      const cX = Math.cos(a - 0.2) * r * 0.6, cY = Math.sin(a - 0.2) * r * 0.6;
-      ctx.beginPath();
-      ctx.moveTo(tipX, tipY); ctx.lineTo(bX, bY); ctx.lineTo(cX, cY); ctx.closePath();
-      ctx.fill();
-    }
-    ctx.fillStyle = '#f7f0df';
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.28, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  },
-
-  /* 海洋名称标注：四个角落区域若大部分是水域，标注北海/东海/西海/南海 */
-  drawOceanNames(rect, ver) {
-    const t = ver.terrain || {};
-    const W = t.W || this.W, H = t.H || this.H;
-    if (!t.heightmap) return;
-    const arr = this.decodeHeightmap(t.heightmap);
-    const th = 0.46 * 255;
-    const zones = [
-      { name: '北海', x0: 0.03, y0: 0.03, x1: 0.34, y1: 0.34 },
-      { name: '东海', x0: 0.66, y0: 0.03, x1: 0.97, y1: 0.34 },
-      { name: '西海', x0: 0.03, y0: 0.66, x1: 0.34, y1: 0.97 },
-      { name: '南海', x0: 0.66, y0: 0.66, x1: 0.97, y1: 0.97 }
-    ];
-    const ctx = this.ctx;
-    const w = rect.width * this.view.scale, hgt = rect.height * this.view.scale;
-    ctx.font = 'italic bold 15px sans-serif';
-    ctx.textAlign = 'center';
-    for (const z of zones) {
-      let water = 0, total = 0, sx = 0, sy = 0;
-      const x0 = Math.floor(W * z.x0), x1 = Math.floor(W * z.x1), y0 = Math.floor(H * z.y0), y1 = Math.floor(H * z.y1);
-      for (let y = y0; y < y1; y += 2) {
-        for (let x = x0; x < x1; x += 2) {
-          if (arr[y * W + x] < th) { water++; sx += x; sy += y; }
-          total++;
-        }
-      }
-      if (water / total > 0.5 && water > 0) {
-        const px = (sx / water / W) * w + this.view.ox;
-        const py = (sy / water / H) * hgt + this.view.oy;
-        ctx.fillStyle = 'rgba(63,105,140,0.8)';
-        ctx.fillText(z.name, px, py);
-      }
-    }
-    ctx.textAlign = 'left';
-  },
-
-  /* 现实地图风装饰：卷轴标题 + 罗盘 + 图例 + 边框 */
-  drawDecorations(rect, ver) {
-    const ctx = this.ctx;
-    const W = rect.width, H = rect.height;
-    // 卷轴式标题（顶部居中）
-    const title = '🗺 ' + (ver.label || '世界地图');
-    const sub = ver.event ? ver.event : (ver.markers.length ? '已标注 ' + ver.markers.length + ' 个地点' : '山川河流·地域分布');
-    ctx.font = 'bold 20px sans-serif';
-    const tw = ctx.measureText(title).width + 56;
-    const ty = 16;
-    ctx.fillStyle = 'rgba(248,242,228,0.92)';
-    ctx.strokeStyle = 'rgba(120,90,50,0.6)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(W / 2 - tw / 2, ty, tw, 44, 8);
-    ctx.fill();
-    ctx.stroke();
-    // 卷轴两端
-    ctx.fillStyle = 'rgba(200,160,100,0.85)';
-    ctx.beginPath(); ctx.arc(W / 2 - tw / 2 - 2, ty + 22, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(W / 2 + tw / 2 + 2, ty + 22, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#5a4628';
-    ctx.font = 'bold 18px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(title, W / 2, ty + 27);
-    ctx.font = '11px sans-serif';
-    ctx.fillStyle = '#8a6e4a';
-    ctx.fillText(sub, W / 2, ty + 40);
-    ctx.textAlign = 'left';
-    // 罗盘（右上角）
-    this.drawCompass(ctx, W - 70, 96, 40);
-    // 图例（左下角）
-    const lx = 18, ly = H - 118, lw = 158;
-    ctx.fillStyle = 'rgba(248,242,228,0.9)';
-    ctx.strokeStyle = 'rgba(120,90,50,0.5)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(lx, ly, lw, 104, 8);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#5a4628';
-    ctx.font = 'bold 12px sans-serif';
-    ctx.fillText('图例', lx + 10, ly + 18);
-    ctx.font = '11px sans-serif';
-    const rows = [
-      ['#8a6b45', '山脉'],
-      ['#5d9fc4', '河流'],
-      ['#7ba05e', '森林'],
-      ['#c98b4b', '势力领地']
-    ];
-    rows.forEach((r, i) => {
-      const y = ly + 36 + i * 17;
-      ctx.fillStyle = r[0];
-      ctx.fillRect(lx + 10, y - 8, 12, 8);
-      ctx.fillStyle = '#5a4628';
-      ctx.fillText(r[1], lx + 30, y);
-    });
-    // 边框（浅色双线）
-    ctx.strokeStyle = 'rgba(120,90,50,0.4)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(10, 10, W - 20, H - 20);
-    ctx.lineWidth = 1;
-    ctx.strokeRect(15, 15, W - 30, H - 30);
-  },
-
-  draw() {
-    if (!this.map) return;
-    const cv = this.canvas, ctx = this.ctx;
-    const rect = this.stage.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    cv.width = Math.max(1, Math.floor(rect.width * dpr));
-    cv.height = Math.max(1, Math.floor(rect.height * dpr));
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#10141c';
-    ctx.fillRect(0, 0, cv.width, cv.height);
-    const ver = this.getCur();
-    const w = rect.width * this.view.scale, hgt = rect.height * this.view.scale;
-    ctx.imageSmoothingEnabled = true;
-    if (ver.terrainType === 'image' && ver.imageData && ver.imageData.dataUrl) {
-      // AI 生成底图
-      if (!this._aiImgEl || this._aiImgEl.src !== ver.imageData.dataUrl) {
-        const im = new Image();
-        im.src = ver.imageData.dataUrl;
-        this._aiImgEl = im;
-        im.onload = () => { if (this._aiImgEl === im) this.draw(); };
-      }
-      if (this._aiImgEl.complete && this._aiImgEl.naturalWidth) {
-        ctx.drawImage(this._aiImgEl, this.view.ox, this.view.oy, w, hgt);
-      }
-    } else {
-      // 程序化地形（现实信息地图风）
-      const off = this.renderTerrainOff(ver);
-      ctx.drawImage(off, this.view.ox, this.view.oy, w, hgt);
-      this.drawOceanNames(rect, ver);
-      this.drawDecorations(rect, ver);
-    }
-    // 导入的草图底图（半透明叠加）
-    if (this.showSketchImage && this.sketchImage) {
-      if (!this._sketchImgEl) {
-        const im = new Image();
-        im.src = this.sketchImage.dataUrl;
-        this._sketchImgEl = im;
-        im.onload = () => { if (this._sketchImgEl === im) this.draw(); };
-      }
-      if (this._sketchImgEl.complete && this._sketchImgEl.naturalWidth) {
-        ctx.save();
-        ctx.globalAlpha = 0.4;
-        ctx.drawImage(this._sketchImgEl, this.view.ox, this.view.oy, w, hgt);
-        ctx.restore();
-      }
-    }
-    // 势力区域
-    for (const r of ver.regions) {
-      ctx.beginPath();
-      r.points.forEach((p, i) => i ? ctx.lineTo(p.x * w + this.view.ox, p.y * hgt + this.view.oy) : ctx.moveTo(p.x * w + this.view.ox, p.y * hgt + this.view.oy));
-      ctx.closePath();
-      ctx.fillStyle = r.color + '44';
-      ctx.fill();
-      ctx.strokeStyle = r.color;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      const cx = r.points.reduce((s, p) => s + p.x, 0) / r.points.length;
-      const cy = r.points.reduce((s, p) => s + p.y, 0) / r.points.length;
-      ctx.fillStyle = r.color;
-      ctx.font = 'bold 14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(r.name, cx * w + this.view.ox, cy * hgt + this.view.oy - 10);
-    }
-    // 区域绘制中的临时点
-    if (this.regionMode && this.regionPts.length) {
-      ctx.strokeStyle = '#ffd27d';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 6]);
-      ctx.beginPath();
-      this.regionPts.forEach((p, i) => i ? ctx.lineTo(p.x * w + this.view.ox, p.y * hgt + this.view.oy) : ctx.moveTo(p.x * w + this.view.ox, p.y * hgt + this.view.oy));
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    // 地点标记
-    const types = { '宗门': '🏯', '城市': '🏙️', '秘境': '✨', '战场': '⚔️', '其他': '📌' };
-    for (const m of ver.markers) {
-      if (this.curType !== '全部' && m.type !== this.curType) continue;
-      const px = m.x * w + this.view.ox, py = m.y * hgt + this.view.oy;
-      const r = 16 / Math.sqrt(this.view.scale);
-      ctx.beginPath();
-      ctx.arc(px, py, r + 4, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.fill();
-      ctx.font = (r * 1.6) + 'px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(types[m.type] || '📌', px, py);
-      ctx.textBaseline = 'alphabetic';
-      if (this.view.scale > 0.8) {
-        ctx.font = 'bold 13px sans-serif';
-        ctx.fillStyle = '#fff';
-        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-        ctx.lineWidth = 3;
-        ctx.strokeText(m.name, px, py + r + 16);
-        ctx.fillText(m.name, px, py + r + 16);
-      }
-    }
-    // 草图叠加（黄色半透明笔画）
-    if (this.sketch.length) {
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      for (const s of this.sketch) {
-        if (!s.points || s.points.length < 2) continue;
-        ctx.beginPath();
-        s.points.forEach((p, i) => i ? ctx.lineTo(p.x * w + this.view.ox, p.y * hgt + this.view.oy) : ctx.moveTo(p.x * w + this.view.ox, p.y * hgt + this.view.oy));
-        ctx.strokeStyle = s.color || this.sketchColor;
-        ctx.globalAlpha = 0.75;
-        ctx.lineWidth = 4 / Math.sqrt(this.view.scale);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-    }
   }
 };
 
