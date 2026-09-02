@@ -154,6 +154,10 @@ nav.bottom { display: none; }
 .sect-wrap { overflow: auto; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); }
 .sect-wrap svg { display: block; }
 
+/* ===== 世界观页（设定库 + AI 对话） ===== */
+.world-page { display: flex; flex-direction: row; }
+.world-main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.world-main .page-inner { flex: 1; overflow: auto; }
 /* ===== 地图页 ===== */
 .map-page { display: flex; flex-direction: row; }
 .map-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -162,6 +166,19 @@ nav.bottom { display: none; }
 .map-stage { flex: 1; position: relative; overflow: hidden; background: #10141c; }
 .map-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
 .map-pop { position: absolute; z-index: 20; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; box-shadow: var(--shadow); max-width: 280px; font-size: 13px; }
+/* 文字地图视图 */
+.m-text {
+  position: absolute; inset: 0; z-index: 25; overflow: auto; padding: 14px;
+  background: var(--bg); color: var(--ink);
+}
+.m-text h4 { font-size: 14px; margin: 12px 0 6px; display: flex; align-items: center; gap: 8px; }
+.m-text .zone-card {
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 6px;
+  background: var(--panel); display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.m-text .zone-card .t { font-weight: 700; font-size: 13px; min-width: 90px; }
+.m-text .zone-card .d { flex: 1; font-size: 13px; color: var(--ink); line-height: 1.6; min-width: 120px; }
+.m-text .zone-card .tag { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--accent-soft); white-space: nowrap; }
 .map-versions { position: absolute; right: 12px; top: 12px; z-index: 20; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; max-height: 60%; overflow: auto; width: 220px; box-shadow: var(--shadow); }
 .map-versions h5 { font-size: 13px; margin-bottom: 6px; }
 .version-item { font-size: 12px; padding: 5px 6px; border-radius: 8px; cursor: pointer; }
@@ -504,6 +521,7 @@ async function ensureDefaults() {
   if (!(await dbGet('sect', 'tree'))) await dbPut('sect', { id: 'tree', nodes: [] });
   if (!(await dbGet('chat', 'chat'))) await dbPut('chat', { id: 'chat', messages: [] });
   if (!(await dbGet('chat', 'mapchat'))) await dbPut('chat', { id: 'mapchat', messages: [] });
+  if (!(await dbGet('chat', 'worldchat'))) await dbPut('chat', { id: 'worldchat', messages: [] });
   const chapters = await dbAll('chapters');
   if (chapters.length === 0) {
     await dbPut('chapters', {
@@ -2351,32 +2369,71 @@ PageMods.characters = Characters;
 ;
 ;/* ==== world.js ==== */
 'use strict';
-/* ===== 世界观页：分类设定库 ===== */
+/* ===== 世界观页：分类设定库 + AI 对话辅助（沟通完善世界观 → 草案采纳 → 全工具同步） ===== */
 
 const World = {
   mounted: false,
   cats: ['全部', '境界体系', '功法', '势力', '金手指', '时间线', '地理', '其他'],
   curCat: '全部',
+  busy: false,
 
   async mount(c) {
     this.c = c;
     c.innerHTML = `
-      <div class="page-inner">
-        <div class="page-title">
-          🌍 世界观设定库
-          <div class="spacer"></div>
-          <button id="world-add" class="btn primary small">＋ 新增设定</button>
-          <button id="world-ai" class="btn small">🤖 AI 协助</button>
+      <div class="world-page">
+        <div class="world-main">
+          <div class="page-inner">
+            <div class="page-title">
+              🌍 世界观设定库
+              <div class="spacer"></div>
+              <button id="world-add" class="btn primary small">＋ 新增设定</button>
+              <button id="world-ai-open" class="btn small only-drawer">🤖 世界观AI</button>
+            </div>
+            <div class="cat-tabs" id="world-cats"></div>
+            <div id="world-list"></div>
+          </div>
         </div>
-        <div class="cat-tabs" id="world-cats"></div>
-        <div id="world-list"></div>
+        <aside class="map-ai" id="world-ai">
+          <div class="map-ai-h">
+            🤖 世界观 AI
+            <span class="ctx" title="对话自动携带：全部设定 + 人物 + 势力 + 地图地点，生成不冲突">已加载全部设定</span>
+            <div class="spacer"></div>
+            <button id="world-ai-close" class="btn small">✕</button>
+          </div>
+          <div class="chat-quick">
+            <button id="wq-draft" class="btn small primary">🤖 生成设定草案</button>
+            <button id="wq-clear" class="btn small">🗑清空对话</button>
+          </div>
+          <div id="world-chat-box" class="chat-box"></div>
+          <div class="chat-in">
+            <textarea id="world-chat-input" rows="2" placeholder="和 AI 沟通世界观：完善设定、规划势力格局、生成地理布局…"></textarea>
+            <button id="world-chat-send" class="btn primary">发送</button>
+          </div>
+        </aside>
       </div>`;
     $('#world-add', c).onclick = () => this.editItem(null);
-    $('#world-ai', c).onclick = () => this.aiAssist();
+    $('#world-ai-open', c).onclick = () => $('#world-ai').classList.add('open');
+    $('#world-ai-close', c).onclick = () => $('#world-ai').classList.remove('open');
+    $('#wq-clear', c).onclick = async () => {
+      if (!(await confirmDlg('清空世界观 AI 的对话？（不影响已采纳的设定）'))) return;
+      await dbPut('chat', { id: 'worldchat', messages: [] });
+      this.renderWorldChat();
+    };
+    $('#wq-draft', c).onclick = () => this.generateDraft();
+    const send = async () => {
+      const inp = $('#world-chat-input', c);
+      const text = inp.value.trim();
+      if (!text || this.busy) return;
+      inp.value = '';
+      await this.worldChatAsk(text);
+    };
+    $('#world-chat-send', c).onclick = send;
+    $('#world-chat-input', c).addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
     this.renderCats();
     await this.render();
+    await this.renderWorldChat();
   },
-  async focus() { await this.render(); },
+  async focus() { await this.render(); await this.renderWorldChat(); },
 
   renderCats() {
     const box = $('#world-cats', this.c);
@@ -2391,7 +2448,7 @@ const World = {
     const box = $('#world-list', this.c);
     box.innerHTML = '';
     const items = rec.items.filter(it => this.curCat === '全部' || it.category === this.curCat);
-    if (!items.length) { box.innerHTML = '<div class="empty-tip">该分类还没有设定。点「＋ 新增设定」添加，或点「🤖 AI 协助」让 AI 帮你起草设定。</div>'; return; }
+    if (!items.length) { box.innerHTML = '<div class="empty-tip">该分类还没有设定。<br>· 点「＋ 新增设定」手动添加<br>· 或右侧「🤖 世界观 AI」对话沟通，AI 产出草案你确认后自动入库</div>'; return; }
     for (const it of items) {
       box.appendChild(el('div', { class: 'card world-item' },
         el('div', { class: 'title', html: `[${esc(it.category)}] ${esc(it.title || '未命名')}` }),
@@ -2407,6 +2464,144 @@ const World = {
           } })
         )
       ));
+    }
+  },
+
+  /* 世界观对话上下文：全部设定 + 人物 + 势力 + 地图地点（AI 生成不冲突） */
+  async worldContext() {
+    const rec = await dbGet('world', 'world') || { id: 'world', items: [] };
+    const chars = await dbAll('characters');
+    const tree = (await dbGet('sect', 'tree')) || { nodes: [] };
+    const maps = await dbAll('maps');
+    const lines = [];
+    lines.push('【当前世界观设定】');
+    lines.push(rec.items.length ? rec.items.map(it => `- [${it.category}] ${it.title}：${(it.content || '').slice(0, 120)}`).join('\n') : '（暂无）');
+    lines.push('\n【人物】' + (chars.length ? chars.map(x => x.name).join('、') : '（暂无）'));
+    lines.push('【势力组织】' + (tree.nodes.length ? tree.nodes.map(n => n.name + (n.role ? '(' + n.role + ')' : '')).join('、') : '（暂无）'));
+    const places = [];
+    for (const m of maps) for (const v of m.versions || []) for (const p of v.markers || []) places.push(p.name);
+    lines.push('【地图地点】' + (places.length ? places.join('、') : '（暂无）'));
+    return lines.join('\n');
+  },
+
+  /* 世界观 AI 对话（独立记录 worldchat，不影响写作对话） */
+  async worldChatAsk(text, meta = {}) {
+    if (this.busy) return;
+    const chat = await dbGet('chat', 'worldchat') || { id: 'worldchat', messages: [] };
+    chat.messages.push({ role: 'user', content: text, ts: Date.now() });
+    await dbPut('chat', chat);
+    this.renderWorldChat();
+    const ctx = await this.worldContext();
+    const sys = '你是小说世界观构建助手。与用户沟通完善世界观设定：帮助细化体系、规划势力格局、设计地理布局、补充时间线等。' +
+      '要求：与已有设定自洽不冲突；若用户要求生成/更新设定，可用【设定草案】格式给出（见生成设定草案按钮）。\n当前世界观状态：\n' + ctx;
+    const hist = chat.messages.slice(-10).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+    this.busy = true;
+    try {
+      const reply = await AI.chat([{ role: 'system', content: sys }, ...hist]);
+      chat.messages.push({ role: 'assistant', content: reply, ts: Date.now(), meta: { ...meta, reqText: text } });
+      await dbPut('chat', chat);
+      await logAdd('世界观', '世界观AI对话：' + text.slice(0, 30));
+    } catch (e) {
+      chat.messages.push({ role: 'assistant', content: '⚠️ ' + e.message, ts: Date.now(), meta: { err: true } });
+      await dbPut('chat', chat);
+      toast(e.message, 'err');
+    }
+    this.busy = false;
+    this.renderWorldChat();
+  },
+
+  async renderWorldChat() {
+    const chat = await dbGet('chat', 'worldchat') || { id: 'worldchat', messages: [] };
+    const box = $('#world-chat-box', this.c);
+    if (!box) return;
+    box.innerHTML = '';
+    if (!chat.messages.length) {
+      box.innerHTML = '<div class="empty-tip">和世界观 AI 沟通：<br>· 聊设定细节（"境界体系怎么分层合理？"）<br>· 规划势力格局（"北方该有个强国"）<br>· 设计地理（"横断山脉隔开齐楚"）<br>· 聊得差不多点「🤖 生成设定草案」批量入库</div>';
+      return;
+    }
+    for (const m of chat.messages) {
+      const div = el('div', { class: 'msg ' + (m.role === 'user' ? 'user' : 'ai') });
+      div.textContent = m.content;
+      div.appendChild(el('div', { class: 'meta', text: new Date(m.ts || Date.now()).toLocaleTimeString('zh-CN', { hour12: false }) }));
+      box.appendChild(div);
+    }
+    box.scrollTop = box.scrollHeight;
+  },
+
+  /* 🤖 生成设定草案：AI 根据对话+现有设定输出结构化草案 → 逐条确认采纳入库 */
+  async generateDraft() {
+    if (this.busy) { toast('AI 处理中…', 'info'); return; }
+    const chat = await dbGet('chat', 'worldchat') || { id: 'worldchat', messages: [] };
+    const ctx = await this.worldContext();
+    const chatTail = chat.messages.slice(-8).map(m => (m.role === 'user' ? '我：' : 'AI：') + m.content.slice(0, 300)).join('\n');
+    this.busy = true;
+    toast('🤖 AI 正在整理设定草案…', 'info');
+    try {
+      const data = await AI.json([
+        { role: 'system', content: '你是小说世界观设定编辑。根据对话与现有设定，整理出需要新增/更新的设定条目。只输出 JSON。\n当前世界观状态：\n' + ctx },
+        { role: 'user', content: '最近对话：\n' + (chatTail || '（无）') + '\n输出：{"items":[{"category":"境界体系|功法|势力|金手指|时间线|地理|其他","title":"设定名","content":"设定内容(详细)"}]}，3~8 条。' }
+      ]);
+      const items = (data.items || []).filter(i => i && i.title && i.content);
+      if (!items.length) { toast('未整理出有效草案', 'err'); return; }
+      await this.showDraftPanel(items);
+    } catch (e) {
+      toast('生成草案失败：' + e.message, 'err');
+    }
+    this.busy = false;
+  },
+
+  /* 草案确认面板：逐条采纳/忽略/修改 → 写入世界观库（全工具自动同步） */
+  async showDraftPanel(items) {
+    const pending = items.slice();
+    let done = 0, adopted = 0;
+    const body = el('div', {});
+    const renderList = () => {
+      body.innerHTML = '';
+      let left = 0;
+      pending.forEach((it, idx) => {
+        if (it._gone) return;
+        left++;
+        body.appendChild(el('div', { style: 'display:flex;gap:8px;align-items:flex-start;padding:8px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;flex-wrap:wrap;background:var(--bg)' },
+          el('div', { style: 'flex:1;min-width:160px' },
+            el('div', { style: 'font-weight:700;font-size:13px', text: '[' + (it.category || '设定') + '] ' + it.title }),
+            el('div', { style: 'font-size:13px;line-height:1.6;margin-top:4px', text: it.content })
+          ),
+          el('button', { class: 'btn small primary', text: '✅ 采纳', onclick: async () => {
+            await this.adoptItem(it);
+            it._gone = true; done++; adopted++;
+            renderList();
+          } }),
+          el('button', { class: 'btn small', text: '✗ 忽略', onclick: async () => { it._gone = true; done++; renderList(); } }),
+          el('button', { class: 'btn small', text: '✏️ 修改', onclick: async () => {
+            const t = await promptDlg('修改设定标题', it.title);
+            if (t) it.title = t;
+            const c = await textareaDlg('修改设定内容', it.content);
+            if (c) it.content = c;
+            renderList();
+          } })
+        ));
+      });
+      const bar = $('#draft-progress');
+      if (bar) bar.textContent = left ? `⏳ 剩余 ${left} 条（采纳后自动入库，写作/人物/势力/地图同步生效）` : '✅ 已全部处理';
+    };
+    body.appendChild(el('div', { id: 'draft-progress', class: 'muted', style: 'margin-bottom:8px' }));
+    renderList();
+    await modal({ title: '🤖 设定草案确认', body, okText: '完成', cancelable: false });
+    if (adopted) {
+      await logAdd('世界观', '草案采纳 ' + adopted + ' 条设定');
+      toast('已入库 ' + adopted + ' 条设定，全工具已同步', 'ok');
+    }
+  },
+
+  async adoptItem(it) {
+    const rec = await dbGet('world', 'world') || { id: 'world', items: [] };
+    if (!rec.items.some(x => x.title === it.title && x.category === it.category)) {
+      rec.items.push({ id: uid(), category: it.category || '其他', title: it.title, content: it.content, updatedAt: Date.now() });
+      await dbPut('world', rec);
+    } else {
+      const ex = rec.items.find(x => x.title === it.title);
+      ex.content = it.content;
+      await dbPut('world', rec);
     }
   },
 
@@ -2434,30 +2629,6 @@ const World = {
     await dbPut('world', rec);
     toast('已保存', 'ok');
     this.render();
-  },
-
-  async aiAssist() {
-    const topic = await promptDlg('AI 协助起草', '', '想完善哪方面设定？如：灵气复苏后的世界格局 / 修仙家族传承 / 金手指规则');
-    if (!topic) return;
-    try {
-      toast('AI 起草中…', 'info');
-      const ctx = await AI.projectContext();
-      const data = await AI.json([
-        { role: 'system', content: '你是小说世界观设定专家。根据用户主题起草设定，要与已有设定兼容。\n' + ctx.text },
-        { role: 'user', content: '主题：' + topic + '\n输出：{"items":[{"category":"分类","title":"标题","content":"详细内容"}]}，1~3 条。' }
-      ]);
-      const rec = await dbGet('world', 'world') || { id: 'world', items: [] };
-      let n = 0;
-      for (const it of (data.items || [])) {
-        if (!it.title) continue;
-        rec.items.push({ id: uid(), category: it.category || '其他', title: it.title, content: it.content || '', updatedAt: Date.now(), aiDraft: true });
-        n++;
-      }
-      await dbPut('world', rec);
-      await logAdd('世界观', 'AI 起草设定「' + topic + '」' + n + ' 条（可编辑修改）');
-      toast('AI 起草了 ' + n + ' 条设定，请检查修改', 'ok');
-      this.render();
-    } catch (e) { toast(e.message, 'err'); }
   }
 };
 
@@ -2704,6 +2875,8 @@ const MapPage = {
   sketchColor: '#ffd27d',
   draggingSketch: null,
   mapBusy: false,
+  textView: false, // 文字地图视图
+  textMap: { items: [] }, // [{id,name,type,zone,desc}]
   sketchImage: null, // {dataUrl, name} 导入的参考草图
   showSketchImage: true,
   _sketchImgEl: null,
@@ -2727,6 +2900,7 @@ const MapPage = {
             <button id="m-img" class="btn small">🖼️ 导入草图</button>
             <button id="m-img-toggle" class="btn small">👁️ 底图</button>
             <button id="m-img-ai" class="btn small">🤖 分析草图</button>
+            <button id="m-text" class="btn small">📝 文字地图</button>
             <select id="m-filter" class="input" style="width:auto;padding:6px 10px">
               <option value="全部">全部地点</option>
               <option value="宗门">🏯 宗门</option>
@@ -2742,6 +2916,7 @@ const MapPage = {
           </div>
           <div class="map-stage" id="m-stage">
             <canvas id="m-canvas"></canvas>
+            <div class="m-text" id="m-text-view" hidden></div>
             <div class="map-pop" id="m-pop" hidden></div>
             <div class="map-versions" id="m-versions" hidden>
               <h5>📜 版本时间线</h5>
@@ -2782,6 +2957,7 @@ const MapPage = {
     this.map = maps[0];
     this.sketch = this.map.sketch || [];
     this.sketchImage = this.map.sketchImage || null;
+    this.textMap = this.map.textMap || { items: [] };
     this._sketchImgEl = null;
     this.render();
     await this.renderMapChat();
@@ -2792,6 +2968,7 @@ const MapPage = {
       this.map = maps[0];
       this.sketch = this.map.sketch || [];
       this.sketchImage = this.map.sketchImage || null;
+      this.textMap = this.map.textMap || { items: [] };
       this._sketchImgEl = null;
     }
     this.render();
@@ -2889,6 +3066,8 @@ const MapPage = {
     };
     // 地图 AI 面板
     $('#m-ai-toggle', c).onclick = () => $('#map-ai').classList.toggle('open');
+    // 文字地图
+    $('#m-text', c).onclick = () => this.toggleTextView();
     $('#m-ai-close', c).onclick = () => $('#map-ai').classList.remove('open');
     const mSend = async () => {
       const inp = $('#map-chat-input', c);
@@ -3100,7 +3279,7 @@ const MapPage = {
     p.style.top = Math.min(rect.height - 320, Math.max(8, py - rect.top - 60)) + 'px';
   },
 
-  async saveMap() { this.map.sketch = this.sketch; this.map.sketchImage = this.sketchImage; await dbPut('maps', this.map); },
+  async saveMap() { this.map.sketch = this.sketch; this.map.sketchImage = this.sketchImage; this.map.textMap = this.textMap; await dbPut('maps', this.map); },
   async saveSketch() { await this.saveMap(); },
 
   async render() {
@@ -3517,6 +3696,190 @@ const MapPage = {
       toast('扩充失败：' + e.message, 'err');
     }
     this.mapBusy = false;
+  },
+
+  /* ===== 文字地图：按方位分区的区域清单（国家/州/山脉/蛮荒…），可手写或 AI 生成 ===== */
+  ZONES: ['北方', '东北', '东方', '东南', '南方', '西南', '西方', '西北', '中央'],
+  TYPE_ICONS: { '国家': '🏰', '州郡': '🏯', '城市': '🏙️', '山脉': '⛰️', '河流': '🏞️', '湖泊': '🏝️', '蛮荒': '🌲', '秘境': '✨', '战场': '⚔️', '水域': '🌊', '其他': '📌' },
+  ZONE_POS: { '北方': [0.5, 0.12], '东北': [0.85, 0.15], '东方': [0.88, 0.5], '东南': [0.85, 0.85], '南方': [0.5, 0.88], '西南': [0.15, 0.85], '西方': [0.12, 0.5], '西北': [0.15, 0.15], '中央': [0.5, 0.5] },
+
+  async toggleTextView() {
+    this.textView = !this.textView;
+    const btn = $('#m-text', this.c);
+    btn.classList.toggle('primary', this.textView);
+    btn.textContent = this.textView ? '🗺️ 图形视图' : '📝 文字地图';
+    if (this.textView) this.renderTextView();
+    else this.render();
+  },
+
+  async renderTextView() {
+    const view = $('#m-text-view', this.c);
+    const canvas = this.canvas;
+    view.hidden = false;
+    canvas.style.display = 'none';
+    view.innerHTML = '';
+    view.appendChild(el('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap' },
+      el('b', { text: '📝 文字地图' }),
+      el('span', { class: 'muted', text: '按方位分区的区域清单，可手写，可让 AI 生成' }),
+      el('div', { class: 'spacer', style: 'flex:1' }),
+      el('button', { class: 'btn small primary', text: '＋ 新增区域', onclick: () => this.addTextItem() }),
+      el('button', { class: 'btn small', text: '🤖 AI 生成', onclick: () => this.aiGenTextMap() }),
+      el('button', { class: 'btn small', text: '🗺️ 应用到图形地图', onclick: () => this.applyTextToGraph() })
+    ));
+    if (!this.textMap.items.length) {
+      view.appendChild(el('div', { class: 'empty-tip', text: '还没有文字地图条目。\n· 点「＋ 新增区域」手写（如：齐国·国家·东方·中原大国）\n· 或「🤖 AI 生成」让 AI 根据当前地图/设定生成整套区域' }));
+      return;
+    }
+    const groups = {};
+    for (const z of this.ZONES) groups[z] = this.textMap.items.filter(i => i.zone === z);
+    const others = this.textMap.items.filter(i => !this.ZONES.includes(i.zone));
+    for (const z of this.ZONES) {
+      if (!groups[z].length) continue;
+      view.appendChild(el('h4', { text: '▸ ' + z }));
+      for (const it of groups[z]) this.appendTextCard(view, it);
+    }
+    if (others.length) {
+      view.appendChild(el('h4', { text: '▸ 其他' }));
+      for (const it of others) this.appendTextCard(view, it);
+    }
+  },
+
+  appendTextCard(view, it) {
+    const icon = this.TYPE_ICONS[it.type] || '📌';
+    view.appendChild(el('div', { class: 'zone-card' },
+      el('span', { class: 't', text: icon + ' ' + it.name }),
+      el('span', { class: 'tag', text: it.type || '区域' }),
+      el('span', { class: 'd', text: it.desc || '（无描述）' }),
+      el('button', { class: 'btn small', text: '✏️', onclick: () => this.editTextItem(it) }),
+      el('button', { class: 'btn small danger', text: '🗑', onclick: async () => {
+        this.textMap.items = this.textMap.items.filter(x => x !== it);
+        await this.saveMap();
+        this.renderTextView();
+      } })
+    ));
+  },
+
+  async addTextItem() {
+    const nameInp = el('input', { class: 'input', style: 'width:100%', placeholder: '名称，如：齐国 / 横断山脉' });
+    const typeSel = el('select', { class: 'input', style: 'width:100%' });
+    for (const t of Object.keys(this.TYPE_ICONS)) typeSel.appendChild(el('option', { value: t, text: t }));
+    const zoneSel = el('select', { class: 'input', style: 'width:100%' });
+    for (const z of this.ZONES) zoneSel.appendChild(el('option', { value: z, text: z }));
+    const descInp = el('textarea', { class: 'input', style: 'width:100%;min-height:60px', placeholder: '描述：位置关系/势力归属/特点…' });
+    const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
+      el('div', {}, el('div', { class: 'muted', text: '名称' }), nameInp),
+      el('div', {}, el('div', { class: 'muted', text: '类型' }), typeSel),
+      el('div', {}, el('div', { class: 'muted', text: '方位' }), zoneSel),
+      el('div', {}, el('div', { class: 'muted', text: '描述' }), descInp)
+    );
+    const ok = await modal({ title: '➕ 新增文字地图区域', body, okText: '保存', cancelText: '取消' });
+    if (!ok) return;
+    const name = nameInp.value.trim();
+    if (!name) { toast('请填写名称', 'err'); return; }
+    this.textMap.items.push({ id: uid(), name, type: typeSel.value, zone: zoneSel.value, desc: descInp.value.trim() });
+    await this.saveMap();
+    await logAdd('地图', '文字地图新增「' + name + '」');
+    this.renderTextView();
+  },
+
+  async editTextItem(it) {
+    const nameInp = el('input', { class: 'input', style: 'width:100%', value: it.name });
+    const typeSel = el('select', { class: 'input', style: 'width:100%' });
+    for (const t of Object.keys(this.TYPE_ICONS)) typeSel.appendChild(el('option', { value: t, text: t, selected: it.type === t ? 'selected' : null }));
+    const zoneSel = el('select', { class: 'input', style: 'width:100%' });
+    for (const z of this.ZONES) zoneSel.appendChild(el('option', { value: z, text: z, selected: it.zone === z ? 'selected' : null }));
+    const descInp = el('textarea', { class: 'input', style: 'width:100%;min-height:60px', html: esc(it.desc || '') });
+    const body = el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
+      el('div', {}, el('div', { class: 'muted', text: '名称' }), nameInp),
+      el('div', {}, el('div', { class: 'muted', text: '类型' }), typeSel),
+      el('div', {}, el('div', { class: 'muted', text: '方位' }), zoneSel),
+      el('div', {}, el('div', { class: 'muted', text: '描述' }), descInp)
+    );
+    const ok = await modal({ title: '✏️ 编辑区域', body, okText: '保存', cancelText: '取消' });
+    if (!ok) return;
+    it.name = nameInp.value.trim() || it.name;
+    it.type = typeSel.value;
+    it.zone = zoneSel.value;
+    it.desc = descInp.value.trim();
+    await this.saveMap();
+    this.renderTextView();
+  },
+
+  /* 🤖 AI 生成文字地图：根据当前图形地图+势力+世界观生成区域清单 → 逐条确认采纳 */
+  async aiGenTextMap() {
+    if (this.mapBusy) { toast('AI 处理中…', 'info'); return; }
+    const ver = this.getCur();
+    const ctx = await this.mapContext();
+    const tree = (await dbGet('sect', 'tree')) || { nodes: [] };
+    const world = await dbGet('world', 'world');
+    const worldBrief = world && world.items.length ? world.items.slice(0, 8).map(i => `[${i.category}] ${i.title}：${(i.content || '').slice(0, 60)}`).join('\n') : '（暂无）';
+    this.mapBusy = true;
+    toast('🤖 AI 正在生成文字地图…', 'info');
+    try {
+      const data = await AI.json([
+        { role: 'system', content: '你是小说世界地理规划师。根据当前地图地点、势力与世界观，生成一套文字地图区域清单（像手绘示意图那样：国家、州郡、城市、山脉、河流、蛮荒等分区，按方位布置）。要求：与已有地点/势力自洽，方位要明确。只输出 JSON。\n当前势力：' + (tree.nodes.map(n => n.name).join('、') || '无') + '\n世界观：\n' + worldBrief },
+        { role: 'user', content: '当前地图：\n' + ctx + '\n输出：{"items":[{"name":"区域名","type":"国家|州郡|城市|山脉|河流|湖泊|蛮荒|秘境|战场|水域|其他","zone":"北方|东北|东方|东南|南方|西南|西方|西北|中央","desc":"描述(位置/归属/特点)"}]}，6~12 条。' }
+      ]);
+      const items = (data.items || []).filter(i => i && i.name);
+      if (!items.length) { toast('未生成有效区域', 'err'); return; }
+      // 确认面板
+      const pending = items.slice();
+      const body = el('div', {});
+      const renderList = () => {
+        body.innerHTML = '';
+        let left = 0;
+        pending.forEach((it, idx) => {
+          if (it._gone) return;
+          left++;
+          body.appendChild(el('div', { style: 'display:flex;gap:8px;align-items:flex-start;padding:8px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;flex-wrap:wrap;background:var(--bg)' },
+            el('div', { style: 'flex:1;min-width:160px' },
+              el('div', { style: 'font-weight:700;font-size:13px', text: (this.TYPE_ICONS[it.type] || '📌') + ' ' + it.name + '（' + (it.zone || '中央') + '）' }),
+              el('div', { style: 'font-size:13px;line-height:1.6;margin-top:4px', text: it.desc || '' })
+            ),
+            el('button', { class: 'btn small primary', text: '✅ 采纳', onclick: async () => {
+              this.textMap.items.push({ id: uid(), name: it.name, type: it.type || '其他', zone: it.zone || '中央', desc: it.desc || '' });
+              it._gone = true;
+              renderList();
+            } }),
+            el('button', { class: 'btn small', text: '✗ 忽略', onclick: async () => { it._gone = true; renderList(); } })
+          ));
+        });
+        const bar = $('#tm-progress');
+        if (bar) bar.textContent = left ? `⏳ 剩余 ${left} 条（采纳后进入文字地图）` : '✅ 已全部处理';
+      };
+      body.appendChild(el('div', { id: 'tm-progress', class: 'muted', style: 'margin-bottom:8px' }));
+      renderList();
+      await modal({ title: '🤖 文字地图生成 · 确认', body, okText: '完成', cancelable: false });
+      await this.saveMap();
+      await logAdd('地图', 'AI 生成文字地图区域');
+      this.renderTextView();
+      toast('文字地图已更新', 'ok');
+    } catch (e) {
+      toast('生成失败：' + e.message, 'err');
+    }
+    this.mapBusy = false;
+  },
+
+  /* 🗺️ 应用到图形地图：文字条目 → 图形地点标记（按方位换算坐标） */
+  async applyTextToGraph() {
+    if (!this.textMap.items.length) { toast('文字地图还没有条目', 'err'); return; }
+    const ver = this.getCur();
+    let added = 0;
+    for (const it of this.textMap.items) {
+      if (ver.markers.some(m => m.name === it.name)) continue;
+      const pos = this.ZONE_POS[it.zone] || [0.5, 0.5];
+      ver.markers.push({
+        id: uid(), name: it.name, type: it.type === '州郡' || it.type === '国家' ? '宗门' : it.type === '城市' ? '城市' : it.type === '秘境' ? '秘境' : it.type === '战场' ? '战场' : '其他',
+        desc: it.desc || '', x: pos[0] + (Math.random() - 0.5) * 0.04, y: pos[1] + (Math.random() - 0.5) * 0.04, renames: []
+      });
+      added++;
+    }
+    if (!added) { toast('文字条目都已在地图上', 'info'); return; }
+    await this.saveMap();
+    await logAdd('地图', '文字地图应用到图形：新增 ' + added + ' 个地点');
+    toast('已按文字地图生成 ' + added + ' 个地点标记', 'ok');
+    this.toggleTextView();
+    this.render();
   },
 
   async renderMapChat() {
