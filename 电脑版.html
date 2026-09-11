@@ -1472,6 +1472,7 @@ const Writing = {
           <button id="sess-outline" class="btn small" title="大纲梳理对话：与写作 AI 分开记录，聊章节剧情/大纲">📋 大纲</button>
         </div>
         <div class="chat-quick" id="qc-write">
+          <button id="qc-direction" class="btn small primary" title="你给我建议推荐：AI 给出 3 个走向 + 各自后果与风险，你点一个才往下走">🎬 给我方向</button>
           <button id="qc-ideas" class="btn small">💡灵感</button>
           <button id="qc-cont" class="btn small">✍️续写</button>
           <button id="qc-facts" class="btn small">📋提取特征</button>
@@ -1596,6 +1597,7 @@ const Writing = {
 
     // AI 续写 / 清空对话 / 提取特征
     $('#qc-cont', c).onclick = () => this.continueWrite();
+    $('#qc-direction', c).onclick = () => this.getDirections();
     $('#qc-ideas', c).onclick = () => this.getIdeas();
     $('#qc-clear', c).onclick = async () => {
       if (!(await confirmDlg('清空「写作」会话记录？（不影响大纲会话与正文）'))) return;
@@ -1814,7 +1816,7 @@ const Writing = {
   setBusy(b) {
     this.busy = b;
     const c = this.c;
-    $('#qc-cont', c).disabled = b; $('#chat-send', c).disabled = b; $('#btn-analyze', c).disabled = b; $('#btn-analyze-all', c).disabled = b; $('#btn-mem', c).disabled = b; $('#btn-review', c).disabled = b; $('#qc-ideas', c).disabled = b;
+    $('#qc-cont', c).disabled = b; $('#chat-send', c).disabled = b; $('#btn-analyze', c).disabled = b; $('#btn-analyze-all', c).disabled = b; $('#btn-mem', c).disabled = b; $('#btn-review', c).disabled = b; $('#qc-ideas', c).disabled = b; $('#qc-direction', c).disabled = b;
   },
 
   /* 🔍 全文审校（融合 Novel-OS 编辑流水线 + novel-writing-framework 去 AI 味） */
@@ -2273,6 +2275,62 @@ const Writing = {
     const req = meta.reqText || '';
     const text = '（换一版）请基于刚才同一个要求，重新生成一版新的内容：角度、表达、细节与上一版明显不同，风格一致且符合人设；不要复述我的要求，直接输出新内容。\n原要求：' + req;
     await this.chatAsk(text, { ...meta, silentUser: true, label: '换一版' });
+  },
+
+  /* 🎬 给我方向：AI 出 3 个走向 + 各自后果与风险，作者点选后才往下走（AI 不替作者定剧情） */
+  async getDirections() {
+    if (this.busy) return;
+    const ask = await promptDlg('你想往哪个方向走？', '', '例如：主角入学第一天，遇到一个让他想起张皓的人');
+    if (!ask) return;
+    await this.flushSave();
+    const ch = await this.getCur();
+    this.setBusy(true);
+    taskProgress('🎬 AI 正在推演 3 个走向…');
+    try {
+      const ctx = await AI.projectContext({ chapterId: this.curId, text: ask });
+      const curOutline = ch ? normOutline(ch.outline).filter(o => !o.done).map(o => '· ' + o.text).join('\n') : '';
+      const data = await AI.json([
+        { role: 'system', content: '你是网文策划。作者给出一个诉求，你要给出 3 个**真正不同**的剧情走向，而不是同一个走向换三种说法。' +
+          '每个走向必须写清：具体发生什么（谁+做了什么+在什么场景）、对后续的后果（谁的态度变了、埋了什么、欠了什么）、风险（读者可能觉得拖/崩/重复的地方）。' +
+          '铁律：只提选项、不替作者决定；不得编造设定库里没有的设定；走向必须与已写章节、人物性格、世界观自洽。\n' + ctx.text },
+        { role: 'user', content: '作者诉求：' + ask + (curOutline ? '\n本章大纲（未完成要点）：\n' + curOutline : '') + '\n输出：{"options":[{"title":"走向标题","what":"具体发生什么(60~120字)","consequence":"对后续的后果(40~80字)","risk":"风险(20~40字)"}]}，3 条。' }
+      ]);
+      const opts = (data.options || []).filter(o => o && o.title && o.what);
+      if (!opts.length) { toast('AI 没能给出走向，换个说法再试', 'err'); return; }
+      await this.showDirections(opts, ask);
+    } catch (e) {
+      toast('推演失败：' + e.message, 'err');
+    } finally {
+      taskProgressDone();
+      this.setBusy(false);
+    }
+  },
+
+  /* 走向面板：采纳某一条 → 写进本章大纲作为方向锚点（之后生成/续写会自动带上） */
+  async showDirections(opts, ask) {
+    const body = el('div', {});
+    body.appendChild(el('div', { class: 'muted', style: 'font-size:12.5px;margin-bottom:10px;line-height:1.7', text: '你的诉求：' + ask + '　——　选一个走向，它会写进本章大纲，AI 之后生成就按它走。' }));
+    opts.forEach((o, i) => {
+      body.appendChild(el('div', { class: 'issue med', style: 'margin-bottom:8px' },
+        el('div', { style: 'font-weight:700;font-size:14px', text: (i + 1) + '. ' + o.title }),
+        el('div', { style: 'font-size:13.5px;line-height:1.7;margin-top:4px', text: o.what }),
+        o.consequence ? el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:4px', text: '↳ 后果：' + o.consequence }) : null,
+        o.risk ? el('div', { style: 'font-size:12.5px;margin-top:3px;color:var(--danger)', text: '⚠ 风险：' + o.risk }) : null,
+        el('button', { class: 'btn small primary', style: 'margin-top:8px', text: '✅ 采用这个走向', onclick: async () => {
+          const cur = await this.getCur();
+          if (!cur) { toast('请先打开一个章节', 'err'); return; }
+          cur.outline = normOutline(cur.outline);
+          cur.outline.push({ id: uid(), text: '🎬 ' + o.title + '：' + o.what, done: false });
+          cur.updatedAt = Date.now();
+          await dbPut('chapters', cur);
+          await logAdd('大纲', '采用走向「' + o.title + '」（写入本章大纲）');
+          toast('已采用「' + o.title + '」——已写进本章大纲，生成时会带上', 'ok');
+          this.closeModalAll();
+          if (this.applyOutline) this.applyOutline();
+        } })
+      ));
+    });
+    await modal({ title: '🎬 给你 3 个方向（选一个才往下走）', body, okText: '先不选', cancelable: true });
   },
 
   /* 💡 灵感：AI 基于当前章节+设定生成剧情灵感，可用/可收藏（带进度提示） */
@@ -2880,14 +2938,15 @@ const Onboarding = {
     toast('🤖 AI 正在策划立项方案（书名/卖点/世界观/人设/章节骨架）…', 'info');
     try {
       const sys = '你是资深网文开书立项策划，深谙男频/女频爽文套路与平台规则。根据问卷输出一套完整的开书方案。' +
-        '要求：1) 有黄金三章意识（前三章钩子密集、冲突前置）；2) 贴合目标平台与字数规划（如番茄长篇要主线+支线+升级体系清晰）；3) 金手指要有限制与成长空间；4) 世界观设定互相自洽。\n' +
+        '要求：1) 有黄金三章意识（前三章钩子密集、冲突前置）；2) 贴合目标平台与字数规划（如番茄长篇要主线+支线+升级体系清晰）；3) 金手指要有限制与成长空间；4) 世界观设定互相自洽；' +
+        '5) **人物分两类**：主角可写性格与说话风格；**配角一律只给姓名、剧情定位与一句话简介，绝不要写性格和说话风格**——配角的人设由作者本人亲自设定。\n' +
         '只输出 JSON，不要任何其他文字。';
       const user = '问卷：题材「' + q.topic + '」、风格「' + q.style + '」、主角「' + q.hero + '」、金手指「' + q.power + '」、世界观「' + q.world + '」、目标「' + q.goal + '」。\n' +
         '输出JSON：' +
         '{"title":"书名","hook":"一句话卖点/开篇钩子","worldItems":[{"category":"境界体系|势力|金手指|时间线|地理|其他","title":"设定名","content":"设定内容"}],' +
-        '"characters":[{"name":"姓名","bio":"简介","personality":"性格","speechStyle":"说话风格","skills":[{"name":"技能名","desc":"描述"}]}],' +
+        '"characters":[{"name":"姓名","role":"剧情定位/作用（如：主角队友·土系防御型）","bio":"一句话简介","personality":"仅主角填；配角留空字符串","speechStyle":"仅主角填；配角留空字符串"}],' +
         '"chapters":[{"title":"第1章 XXX","points":"本章要点（2~3句）"}]}\n' +
-        'worldItems 3~6 条，characters 2~4 个（含主角），chapters 10~15 章（含黄金三章）。';
+        'worldItems 3~6 条；characters 3~5 个（主角 1 个可含性格，其余配角 personality/speechStyle 必须是空字符串）；chapters 10~15 章（含黄金三章）。';
       const data = await AI.json([{ role: 'system', content: sys }, { role: 'user', content: user }]);
       if (!data.title && !(data.worldItems || []).length && !(data.chapters || []).length) {
         throw new Error('AI 返回的立项方案为空');
@@ -3010,7 +3069,14 @@ const Onboarding = {
         return true;
       }
       if (kind === 'characters') {
-        return await CharOps.applyItem('people', item);
+        // 配角（AI 没给性格）→ 先进「待定人设」，作者填完性格才正式入人物库
+        const needPersona = !String(item.personality || '').trim();
+        const ok2 = await CharOps.applyItem('people', { ...item, pending: needPersona });
+        if (ok2 && needPersona) {
+          await logAdd('立项', '配角「' + item.name + '」进入待定人设（等作者设定性格）');
+          toast('配角「' + item.name + '」已进「待定人设」，去「人物」页填性格后才入库', 'info');
+        }
+        return ok2;
       }
       if (kind === 'chapters') {
         const ch = {
@@ -3109,7 +3175,9 @@ const CharOps = {
         const obj = {
           id: uid(), name: item.name, emoji: '👤', bio: item.bio || '', personality: item.personality || '',
           speechStyle: item.speechStyle || '', skills: (item.skills || []).map(s => ({ name: s.name, desc: s.desc || '' })),
-          faction: null, facts: [], relations: [], createdAt: Date.now(), updatedAt: Date.now()
+          faction: null, facts: [], relations: [], createdAt: Date.now(), updatedAt: Date.now(),
+          // AI 生成的新配角先进「待定人设」：性格/说话风格由作者亲自填，填完才正式入库
+          pending: !!item.pending, role: item.role || ''
         };
         await dbPut('characters', obj);
         await logAdd('人物', '章节识别采纳：新建人物「' + obj.name + '」');
@@ -3210,10 +3278,18 @@ const Characters = {
     if (!chars.length) { body.innerHTML = '<div class="empty-tip">还没有人物。<br>· 点「＋ 新人物」手动添加<br>· 或在写作页点「📋提取特征」，让 AI 从正文里识别人物和特征（识别结果会进入「待确认」，不会直接写入）</div>'; return; }
     if (Prefs.get().charView === 'graph') { this.renderGraph(chars, body); return; }
     body.innerHTML = '';
+    // 待定人设区：AI 生成的配角在作者填完「性格/说话风格」前，都停在这里
+    const pendingChars = chars.filter(c => c.pending);
+    if (pendingChars.length) body.appendChild(this.renderPendingBlock(pendingChars));
     const grid = el('div', { class: 'char-grid' });
     for (const ch of chars) {
       const pend = (ch.facts || []).filter(f => !f.confirmed).length;
-      grid.appendChild(el('div', { class: 'card char-card', onclick: () => this.openDetail(ch.id) },
+      if (ch.pending) grid.appendChild(el('div', { class: 'card char-card', style: 'border-style:dashed;border-color:var(--accent)', onclick: () => this.editPersona(ch.id) },
+        el('div', { class: 'name', html: '⏳ ' + esc(ch.name) + ' <span class="count">待定人设</span>' }),
+        el('div', { class: 'bio', text: ch.role ? '定位：' + ch.role : (ch.bio || '（AI 刚生成，等你设定）') }),
+        el('div', { class: 'muted', style: 'margin-top:4px', text: '👉 点此填写性格 / 说话风格，填完即正式入库' })
+      ));
+      else grid.appendChild(el('div', { class: 'card char-card', onclick: () => this.openDetail(ch.id) },
         el('div', { class: 'name', html: ch.emoji + ' ' + esc(ch.name) + (pend ? ` <span class="count">(${pend} 条待确认)</span>` : '') }),
         el('div', { class: 'bio', text: ch.bio || '（暂无简介）' }),
         ch.personality ? el('div', { class: 'muted', style: 'margin-top:4px', text: '🧠 ' + ch.personality + (ch.speechStyle ? ' · 🗣 ' + ch.speechStyle : '') }) : null,
@@ -3226,6 +3302,62 @@ const Characters = {
       ));
     }
     body.appendChild(grid);
+  },
+
+  /* ⏳ 待定人设区：AI 生成的配角，性格与说话风格必须由作者本人设定后才入库 */
+  renderPendingBlock(list) {
+    const box = el('div', { class: 'card', style: 'margin-bottom:12px;border-left:4px solid var(--accent)' });
+    box.appendChild(el('div', { style: 'font-weight:700;margin-bottom:4px', text: '⏳ 待定人设（' + list.length + ' 位）——AI 只给了姓名和定位，性格由你来定' }));
+    box.appendChild(el('div', { class: 'muted', style: 'font-size:12.5px;margin-bottom:8px;line-height:1.7', text: '他们还没有正式入库，也不会被 AI 当成已有人物使用。点「✍️ 设定人设」把性格、说话风格填上，保存后才进人物库。' }));
+    for (const ch of list) {
+      box.appendChild(el('div', { style: 'display:flex;gap:8px;align-items:center;padding:7px 9px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px;flex-wrap:wrap;background:var(--bg)' },
+        el('div', { style: 'flex:1;min-width:160px' },
+          el('div', { style: 'font-weight:700;font-size:13.5px', text: ch.name + (ch.role ? '（' + ch.role + '）' : '') }),
+          ch.bio ? el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:2px', text: ch.bio }) : null
+        ),
+        el('button', { class: 'btn small primary', text: '✍️ 设定人设', onclick: async () => { await this.editPersona(ch.id); } }),
+        el('button', { class: 'btn small danger', text: '🗑 不要', onclick: async () => {
+          if (!(await confirmDlg('删掉「' + ch.name + '」？（AI 生成的候选人物，删除不影响正文）'))) return;
+          await dbDel('characters', ch.id);
+          await logAdd('人物', '删除待定人设「' + ch.name + '」');
+          this.render();
+        } })
+      ));
+    }
+    return box;
+  },
+
+  /* ✍️ 设定人设：作者填性格/说话风格/技能 → 保存后转正式人物卡 */
+  async editPersona(id) {
+    const ch = await dbGet('characters', id);
+    if (!ch) return;
+    const body = el('div', { style: 'display:flex;flex-direction:column;gap:12px' });
+    const mk = (key, label, hint, value, ph) => el('div', {},
+      el('label', { class: 'muted', text: label }),
+      hint ? el('div', { class: 'muted', style: 'font-size:12px;margin-bottom:4px', text: hint }) : null,
+      el('input', { id: 'p-' + key, class: 'input', style: 'width:100%', value: value || '', placeholder: ph || '' })
+    );
+    body.appendChild(el('div', { style: 'font-weight:700', text: '⏳ ' + ch.name + (ch.role ? '（' + ch.role + '）' : '') }));
+    if (ch.bio) body.appendChild(el('div', { class: 'muted', style: 'font-size:12.5px;line-height:1.7', text: 'AI 给的简介：' + ch.bio }));
+    body.appendChild(mk('personality', '性格（必填）', '例：外冷内热、遇事只信自己、被夸会别扭', ch.personality, '性格描述（写作时 AI 会严格遵守）'));
+    body.appendChild(mk('speech', '说话风格', '例：话少，爱用反问；生气时反而更客气', ch.speechStyle, '说话风格'));
+    body.appendChild(mk('bio', '简介', '', ch.bio, '一句话简介'));
+    body.appendChild(mk('skills', '技能/功法', '多条用顿号或逗号隔开', (ch.skills || []).map(s => s.name).join('、'), '如：玄甲镇军诀、破阵冲'));
+    const ok = await modal({ title: '✍️ 设定人设 · ' + ch.name, body, okText: '💾 保存并入库', cancelText: '取消' });
+    if (!ok) return;
+    const val = (k) => { const e = $('#p-' + k, body); return e ? e.value.trim() : ''; };
+    if (!val('personality')) { toast('性格是必填的——AI 写作时靠它保人设', 'err'); return; }
+    ch.personality = val('personality');
+    ch.speechStyle = val('speech');
+    if (val('bio')) ch.bio = val('bio');
+    const skills = val('skills').split(/[、,，;；]/).map(s => s.trim()).filter(Boolean);
+    if (skills.length) ch.skills = skills.map(n => ({ name: n, desc: '' }));
+    ch.pending = false;
+    ch.updatedAt = Date.now();
+    await dbPut('characters', ch);
+    await logAdd('人物', '作者设定人设并入库「' + ch.name + '」');
+    toast('「' + ch.name + '」已入库（性格/说话风格已生效）', 'ok');
+    this.render();
   },
 
   /* 详情弹窗 */
