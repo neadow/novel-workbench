@@ -1,4 +1,4 @@
-/* 小说创作工作台 Service Worker：网络优先（在线自动更新）+ 离线兜底缓存 */
+/* 诸葛说说 Service Worker：网络优先（在线自动更新）+ 离线兜底缓存 */
 const CACHE = 'novel-workbench-v2';
 
 self.addEventListener('install', (e) => {
